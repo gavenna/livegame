@@ -1,0 +1,117 @@
+# CLAUDE.md — war-danmaku
+
+> 弹幕互动阵营对抗游戏。中世纪战争题材 · 抖音平台 · Node.js + Web Canvas。
+> **一句话定位**: 观众发弹幕选阵营、刷礼物出兵，双方对战推城堡。主播解说煽动，营收来自礼物分成。
+
+## 命令
+
+```bash
+node server/index.js                    # 启动游戏服务器 (WebSocket :8765)
+npx http-server frontend -p 3000 -c-1  # 启动前端 (OBS 浏览器源 http://localhost:3000)
+node --check server/*.js               # JS 语法检查
+```
+
+开发时开两个终端：一个跑 server，一个跑 frontend。浏览器打开 `http://localhost:3000` 看到游戏画面。
+
+## 架构
+
+单体 Node.js 服务器 + 纯 HTML5 Canvas 前端。数据流:
+
+```
+抖音弹幕 → Danmaku Adapter → Game Engine → WebSocket → 前端 Canvas 渲染
+                              ↓
+                         积分/排行/段位（内存存储，Phase 3 加 SQLite）
+```
+
+- **Server**: Node.js + `ws` 库。单进程处理 WebSocket + 游戏逻辑 + 弹幕接入
+- **Frontend**: 单个 `index.html` + Canvas JS。OBS 浏览器源直接填 URL 抓画面
+- **Danmaku**: 开发期用 B站开放协议调试，上线切抖音第三方工具
+- **无数据库**: Phase 1-2 用内存存储（重启清空），Phase 3 加 SQLite
+
+## 🚨 核心规则
+
+### JS/Node
+- 不写 `.catch(() => {})` 静默吞错，至少 `console.error`
+- async/await 不用 bare `Promise`，always await
+- WebSocket 断连必须自动重连（exponential backoff）
+- `process.exit()` 只在 `index.js` 入口用
+
+### Canvas 渲染
+- Canvas 尺寸从配置读，不写死 px。OBS 常见分辨率 1920×1080 / 1280×720
+- 所有动画用 `requestAnimationFrame`，不用 `setInterval`
+- 兵种精灵图预加载，不边渲染边加载
+- 弹幕滚动层和战斗层分两个 Canvas 叠加，避免重绘互相影响
+
+### 游戏逻辑
+- 数值全部放 `server/config.js`，不在业务代码里写死
+- 改兵种属性 → 改 config → 重启 server。不热更新（先保证稳定性）
+- 动态平衡机制（人数平衡、劣势保护、碾压加速）必须有，否则碾压局没人消费
+- 每局结束后日志输出关键数据（双方人数、礼物总额、MVP、时长），便于调优
+
+### 通用规则
+- 改功能前先 grep 全链路调用点
+- emit 方只发事件，listener 统一处理持久化
+- 禁止贴膏药：修根因不堵出口
+- 管道调试铁律：涉及数据流（弹幕→游戏→渲染）的改动，先在首尾加 console.log 看清数据再改逻辑
+
+## 关键文件
+
+| 文件 | 改它时注意 |
+|------|-----------|
+| `server/config.js` | 兵种属性、数值参数、平衡系数。改了要重启 server |
+| `server/gameEngine.js` | 游戏状态机（WAITING→COUNTDOWN→PLAYING→ROUND_END）。所有游戏共用 |
+| `server/battle.js` | 战斗逻辑（出兵、交战计算、战线推进）。性能敏感，避免每帧遍历全量兵种 |
+| `server/wsServer.js` | WebSocket 服务。断连重连逻辑在这里 |
+| `server/ranking.js` | 积分/段位/排行榜。纯内存，改数据结构要兼容旧积分 |
+| `frontend/renderer.js` | Canvas 渲染主循环。帧率目标 30fps（直播 30fps 足够，省 CPU） |
+| `frontend/sprites.js` | 兵种精灵绘制。几何图形时期（Phase 1）vs 精灵图时期（Phase 3）实现不同 |
+
+## 工作方式
+
+| 任务 | 怎么处理 |
+|------|---------|
+| 小改动（单文件、<50 行） | 直接做 |
+| 复杂改动（跨文件、游戏逻辑） | 调 Plan agent 出方案再动手 |
+| 数值调优（兵种平衡、时长） | 改 config.js → 重启 → 模拟弹幕测试 |
+| 隔离排查 | 调 `flow-debugger` agent |
+| 标准流程 | 用 skill（/verify /review /wrapup） |
+
+### Agent（1 个）
+| Agent | 用途 |
+|-------|------|
+| `flow-debugger` | 日志诊断（只查不修）。查弹幕流转、战斗计算、WS 通信 |
+
+### Skill（4 个）
+| 命令 | 触发 |
+|------|------|
+| `/verify` | "验证"/"检查改动" |
+| `/review` | "审一下"/"体验" |
+| `/game` | "调数值"/"兵种平衡"/"弹幕协议" |
+| `/wrapup` | "收尾"/"结束"/"收工" |
+
+## 环境
+
+Windows 11 · scoop 包管理 · bash (Git Bash) · `python` 非 `python3` · `node` v18+
+
+## Hook 防护体系
+
+四层 Hook 把关，继承自 waifu-agent 工程体系。
+
+| 层级 | Hook | 检查什么 | 失败后果 |
+|------|------|---------|---------|
+| PreToolUse | `check-catch-silence.py` | `.catch(() => {})` 静默吞错 | **阻断** exit 2 |
+| PostToolUse | `check-game-pipeline.py` | 新增兵种/弹幕指令时渲染管线同步（待实现） | 警告 exit 1 |
+| Stop | `verify.sh` | git diff 检测 → `node --check` 语法检查 | 警告 exit 1 |
+
+`verify.sh` 进 git，其余两个 `settings.local.json` 配置不进 git。
+
+## 会话收尾
+
+调 `/wrapup` skill — 代码 / 文档 / 未修复 bug / pycache 四步扫描。
+
+## 偏好
+
+- 全 inline styles，暗色半透明风，无 CSS 框架
+- 不写 JSDoc，代码自解释
+- 收尾时直接 commit（用户已验证过），不需要确认
+- 手动肉眼验证，无自动化测试

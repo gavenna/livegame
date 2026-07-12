@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>War Danmaku — 炎龙 vs 霜狼</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    overflow: hidden;
+    font-family: 'Microsoft YaHei', sans-serif;
+  }
+  #game-container {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+  }
+  #battle-layer { z-index: 1; }
+  #ui-layer { z-index: 2; }
+  #danmaku-layer { z-index: 3; pointer-events: none; }
+  #status {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #888;
+    font-size: 20px;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="battle-layer" width="1920" height="1080"></canvas>
+  <canvas id="ui-layer" width="1920" height="1080"></canvas>
+  <canvas id="danmaku-layer" width="1920" height="1080"></canvas>
+  <div id="status">⚔ 等待连接...</div>
+</div>
+
+<script src="wsClient.js"></script>
+<script src="sprites.js"></script>
+<script src="ui.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>
