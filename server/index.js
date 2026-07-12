@@ -8,9 +8,13 @@
 const { startWSServer } = require('./wsServer');
 const { GameEngine } = require('./gameEngine');
 const config = require('./config');
+const logger = require('./logger');
 
-console.log('[Server] Starting war-danmaku...');
-console.log('[Server] Config:', JSON.stringify({ port: config.WS_PORT, roundTime: config.ROUND_TIME }, null, 2));
+// 初始化日志系统
+logger.init(config.LOG);
+
+logger.info('SERVER', 'Starting war-danmaku...');
+logger.info('SERVER', `Config: port=${config.WS_PORT} roundTime=${config.ROUND_TIME / 1000}s`);
 
 // 启动 WebSocket 服务
 startWSServer(config.WS_PORT);
@@ -19,12 +23,13 @@ startWSServer(config.WS_PORT);
 const engine = new GameEngine(config);
 engine.start();
 
-console.log('[Server] Ready. WebSocket on ws://localhost:' + config.WS_PORT);
-console.log('[Server] Open http://localhost:3000 in browser for game view');
+logger.info('SERVER', `Ready. WebSocket ws://localhost:${config.WS_PORT}`);
+logger.info('SERVER', `Logs → ${logger.getSessionPath() || '(terminal only)'}`);
 
 // 优雅退出
 process.on('SIGINT', () => {
-  console.log('\n[Server] Shutting down...');
+  logger.info('SERVER', 'Shutting down...');
   engine.stop();
+  logger.close();
   process.exit(0);
 });

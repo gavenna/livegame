@@ -1,13 +1,29 @@
 /**
  * WebSocket 服务
  *
- * 职责: 维护前端连接池，推送游戏状态，接收前端事件
+ * 职责: 维护前端连接池，推送游戏状态，接收前端事件 & 模拟器指令
  */
 
 const { WebSocketServer } = require('ws');
+const logger = require('./logger');
+const assert = require('./assert');
 
 /** @type {Set<import('ws').WebSocket>} */
 const clients = new Set();
+
+/** @type {Map<string, import('ws').WebSocket>} 按 playerId 索引的连接 */
+const playerConns = new Map();
+
+/** 消息处理回调（由 GameEngine 注册） */
+let messageHandler = null;
+
+/**
+ * 注册消息处理回调
+ * @param {(msg: object, ws: import('ws').WebSocket) => void} handler
+ */
+function onMessage(handler) {
+  messageHandler = handler;
+}
 
 /**
  * 启动 WebSocket 服务
@@ -17,35 +33,52 @@ function startWSServer(port) {
   const wss = new WebSocketServer({ port });
 
   wss.on('listening', () => {
-    console.log('[WS] Listening on port', port);
+    logger.info('WS', `Listening on port ${port}`);
   });
 
   wss.on('connection', (ws) => {
-    console.log('[WS] Client connected. Total:', clients.size + 1);
+    logger.info('WS', `Client connected. Total: ${clients.size + 1}`);
     clients.add(ws);
 
     ws.on('close', () => {
       clients.delete(ws);
-      console.log('[WS] Client disconnected. Total:', clients.size);
+      for (const [pid, conn] of playerConns) {
+        if (conn === ws) { playerConns.delete(pid); break; }
+      }
+      logger.info('WS', `Client disconnected. Total: ${clients.size}`);
     });
 
     ws.on('error', (err) => {
-      console.error('[WS] Client error:', err.message);
+      logger.error('WS', `Client error: ${err.message}`);
       clients.delete(ws);
     });
 
-    // 前端发来的消息（暂不处理，预留）
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
-        console.log('[WS] Received from client:', msg);
+        assert.assert(!!msg.type, 'WS 消息缺少 type 字段');
+
+        if (assert.knownMsgType(msg.type)) {
+          logger.debug('WS', `Received: type=${msg.type} player=${msg.playerId || '?'}`);
+        }
+
+        // 记录 playerId → ws 映射
+        if (msg.playerId) {
+          playerConns.set(msg.playerId, ws);
+        }
+
+        // 路由到游戏引擎
+        if (messageHandler) {
+          messageHandler(msg, ws);
+        }
       } catch (e) {
-        // 忽略非 JSON 消息
+        if (e.name === 'AssertionError') throw e; // 断言错误上抛
+        logger.error('WS', `Invalid message: ${e.message}`);
       }
     });
   });
 
-  console.log('[WS] Server started');
+  logger.info('WS', 'Server started');
 }
 
 /**
@@ -53,6 +86,8 @@ function startWSServer(port) {
  * @param {object} state - 游戏状态对象
  */
 function broadcast(state) {
+  assert.assert(state && state.type, 'broadcast: state 缺失 type 字段');
+
   const payload = JSON.stringify(state);
   for (const ws of clients) {
     if (ws.readyState === ws.OPEN) {
@@ -61,4 +96,16 @@ function broadcast(state) {
   }
 }
 
-module.exports = { startWSServer, broadcast };
+/**
+ * 发送消息到特定玩家
+ * @param {string} playerId
+ * @param {object} msg
+ */
+function sendToPlayer(playerId, msg) {
+  const ws = playerConns.get(playerId);
+  if (ws && ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
+}
+
+module.exports = { startWSServer, broadcast, onMessage, sendToPlayer };

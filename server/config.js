@@ -27,29 +27,37 @@ module.exports = {
     COMEBACK_BUFF: 0.15,            // 劣势方伤害 +15%
     STOMP_TIME: 5 * 60 * 1000,      // 碾压 5分钟触发加速
     STOMP_BUFF: 0.10,               // 优势方伤害 +10%
+    // 战斗参数
+    COUNTER_MULTIPLIER: 2.0,        // 克制伤害倍率
+    PUSH_FACTOR: 0.02,             // 战线推进系数（每点伤害差推进的战线单位）
+    COLLISION_RANGE: 60,           // 交战距离 (px)
+    SPEED_FACTOR: 3,              // 速度→像素转换 (px/tick per speed unit)
+    CASTLE_DMG_PER_TICK: 50,      // 战线到城堡时每 tick 伤害
+    FRONTLINE_MAX: 1000,          // 战线最大值（到达城堡）
+    MAX_TROOP_AGE: 60 * 1000,     // 兵种最大存活时间 60秒
   },
 
   // === 兵种定义 ===
   // 每个兵种 = 一个付费档位
   TROOPS: {
     // 免费层
-    militia:  { name: '民兵',   damage: 1,   hp: 10,  speed: 1.0, cost: 0,     showAvatar: false, avatarSize: 0,    avatarTime: 0 },
+    militia:  { name: '民兵',   damage: 1,   hp: 10,  speed: 1.0, cost: 0,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
     // 入门层 (~1元)
-    swordsman:{ name: '剑士',   damage: 5,   hp: 30,  speed: 1.2, cost: 1,     showAvatar: false, avatarSize: 0,    avatarTime: 0 },
-    knight:   { name: '骑士',   damage: 25,  hp: 80,  speed: 2.0, cost: 5,     showAvatar: false, avatarSize: 0,    avatarTime: 0 },
+    swordsman:{ name: '剑士',   damage: 5,   hp: 30,  speed: 1.2, cost: 1,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
+    knight:   { name: '骑士',   damage: 25,  hp: 80,  speed: 2.0, cost: 5,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
     // 进阶层 (1~10元)
-    archer:   { name: '弓手',   damage: 40,  hp: 25,  speed: 1.0, cost: 10,    showAvatar: false, avatarSize: 0,    avatarTime: 0, ranged: true },
-    catapult: { name: '投石车', damage: 120, hp: 50,  speed: 0.5, cost: 30,    showAvatar: false, avatarSize: 0,    avatarTime: 0, aoe: true },
+    archer:   { name: '弓手',   damage: 40,  hp: 25,  speed: 1.0, cost: 10,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['knight'] },
+    catapult: { name: '投石车', damage: 120, hp: 50,  speed: 0.5, cost: 30,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    aoe: true,     counters: ['archer'] },
     // 核心层 (10~100元) ★ 营收主力
-    royalGuard:  { name: '皇家卫队', damage: 200, hp: 200, speed: 1.5, cost: 99,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000 },
-    fireArrow:   { name: '火矢齐射', damage: 500, hp: 0,   speed: 0,   cost: 199, showAvatar: false, avatarSize: 0,       avatarTime: 0,    globalSkill: true, slow: 0.3, slowTime: 8000 },
-    batteringRam:{ name: '攻城锤',   damage: 1500,hp: 0,   speed: 0,   cost: 299, showAvatar: true,  avatarSize: 'medium', avatarTime: 8000,  siege: true },
+    royalGuard:  { name: '皇家卫队', damage: 200, hp: 200, speed: 1.5, cost: 99,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000,  counters: ['knight', 'archer'] },
+    fireArrow:   { name: '火矢齐射', damage: 500, hp: 0,   speed: 0,   cost: 199, showAvatar: false, avatarSize: 0,       avatarTime: 0,    globalSkill: true, slow: 0.3, slowTime: 8000, counters: [] },
+    batteringRam:{ name: '攻城锤',   damage: 1500,hp: 0,   speed: 0,   cost: 299, showAvatar: true,  avatarSize: 'medium', avatarTime: 8000,  siege: true,   counters: [] },
     // 顶级层 (100~500元) ★ 大哥专区
-    giant:       { name: '岩石巨人', damage: 2500, hp: 500, speed: 0.8, cost: 520,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000 },
-    dragonKnight:{ name: '龙骑士',   damage: 6000, hp: 1000,speed: 3.0, cost: 1200, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  fear: true, fearTime: 3000 },
-    wrathOfGod:  { name: '天神之怒', damage: 8000, hp: 0,   speed: 0,   cost: 3000, showAvatar: false,avatarSize: 0,       avatarTime: 0,    globalSkill: true, castleDmg: 0.2 },
+    giant:       { name: '岩石巨人', damage: 2500, hp: 500, speed: 0.8, cost: 520,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000, counters: ['militia', 'swordsman', 'knight', 'archer', 'catapult', 'royalGuard'] },
+    dragonKnight:{ name: '龙骑士',   damage: 6000, hp: 1000,speed: 3.0, cost: 1200, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  fear: true, fearTime: 3000, counters: ['giant'] },
+    wrathOfGod:  { name: '天神之怒', damage: 8000, hp: 0,   speed: 0,   cost: 3000, showAvatar: false,avatarSize: 0,       avatarTime: 0,    globalSkill: true, castleDmg: 0.2, counters: [] },
     // 盲盒
-    warChest:    { name: '战争宝箱', damage: 0,   hp: 0,   speed: 0,   cost: 99,  showAvatar: false, avatarSize: 0,       avatarTime: 0,    random: true },
+    warChest:    { name: '战争宝箱', damage: 0,   hp: 0,   speed: 0,   cost: 99,  showAvatar: false, avatarSize: 0,       avatarTime: 0,    random: true,  counters: [] },
   },
 
   // === 盲盒概率 ===
@@ -100,6 +108,23 @@ module.exports = {
     // '5': 'knight',       // 棒棒糖
     // '10': 'archer',      // 鲜花
     // ...
+  },
+
+  // === 日志（开发调试） ===
+  LOG: {
+    LEVEL: 'DEBUG',           // 全局最低级别: DEBUG | INFO | WARN | ERROR
+    TAGS: {
+      WS: true,               // WebSocket 连接/消息
+      ENGINE: true,           // 游戏状态机
+      BATTLE: true,           // 战斗计算（高频，INFO 级；设 'debug' 开启每 tick 细节）
+      DANMAKU: true,          // 弹幕处理
+      RANKING: true,          // 积分/排行
+      GIFT: true,             // 礼物处理
+      SERVER: true,           // 服务器启动/关闭
+      SIMULATOR: true,        // 模拟器（仅 simulator.js）
+    },
+    TO_FILE: true,            // 日志写入文件 (server/logs/)
+    TO_CONSOLE: true,         // 日志输出终端
   },
 
   // === 渲染 ===

@@ -33,6 +33,7 @@ function connect() {
       const msg = JSON.parse(event.data);
       if (msg.type === 'game_state') {
         gameState = msg;
+        window.gameState = msg; // 让 renderer 也能读到
         document.getElementById('status').textContent =
           `⚔ ${msg.state} — Round ${msg.round}`;
         if (onStateUpdate) onStateUpdate(msg);
