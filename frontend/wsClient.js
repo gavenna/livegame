@@ -62,5 +62,18 @@ function scheduleReconnect() {
   }, reconnectDelay);
 }
 
+/** 发送消息到服务器 */
+function send(msg) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.warn('[WS] Cannot send — not connected');
+    return false;
+  }
+  ws.send(JSON.stringify(msg));
+  return true;
+}
+
+// 暴露到全局，方便控制面板调用
+window.sendToServer = send;
+
 /** 启动连接 */
 connect();

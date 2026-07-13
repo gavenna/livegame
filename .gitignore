@@ -24,6 +24,7 @@ Thumbs.db
 
 # Game data (runtime)
 server/logs/
+data/
 
 # Claude Code
 .claude/*
@@ -40,5 +41,10 @@ server/logs/
 .claude/settings.local.json
 
 # Assets (large binary files, keep out of git)
+assets/sprites/*.png
+assets/sprites/*.jpg
 assets/sprites/*.psd
 assets/sprites/*.ai
+
+# Secrets (API keys)
+server/secrets.json

@@ -1,12 +1,70 @@
 /**
- * WebSocket 服务
+ * WebSocket + HTTP 服务
  *
- * 职责: 维护前端连接池，推送游戏状态，接收前端事件 & 模拟器指令
+ * 职责: 维护前端连接池，推送游戏状态，接收前端事件 & 模拟器指令，
+ *       同时提供静态文件服务（浏览器直接打开即可看到游戏画面）。
  */
 
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { WebSocketServer } = require('ws');
 const logger = require('./logger');
 const assert = require('./assert');
+
+const FRONTEND_DIR = path.resolve(__dirname, '..', 'frontend');
+const ASSETS_DIR = path.resolve(__dirname, '..', 'assets');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript',
+  '.css':  'text/css',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.svg':  'image/svg+xml',
+  '.json': 'application/json',
+  '.ico':  'image/x-icon',
+};
+
+function serveStatic(req, res) {
+  let urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  let filePath;
+
+  // /assets/ → assets 目录
+  if (urlPath.startsWith('/assets/')) {
+    filePath = path.join(ASSETS_DIR, urlPath.slice(8));
+  } else {
+    filePath = path.join(FRONTEND_DIR, urlPath);
+  }
+
+  // 安全检查：防止目录遍历
+  const allowedRoot = urlPath.startsWith('/assets/') ? ASSETS_DIR : FRONTEND_DIR;
+  if (!filePath.startsWith(allowedRoot)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = MIME_TYPES[ext] || 'application/octet-stream';
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        res.writeHead(404);
+        res.end('Not Found');
+      } else {
+        res.writeHead(500);
+        res.end('Server Error');
+      }
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+    res.end(data);
+  });
+}
 
 /** @type {Set<import('ws').WebSocket>} */
 const clients = new Set();
@@ -26,15 +84,52 @@ function onMessage(handler) {
 }
 
 /**
- * 启动 WebSocket 服务
+ * 启动 WebSocket + HTTP 服务
  * @param {number} port
  */
 function startWSServer(port) {
+  const server = http.createServer(serveStatic);
+  const wss = new WebSocketServer({ server });
+
+  server.listen(port, () => {
+    logger.info('WS', `HTTP + WebSocket on http://localhost:${port}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error('WS', `Port ${port} 已被占用 — 请先关闭旧进程: netstat -ano | grep ${port}`);
+      process.exit(1);
+    }
+    throw err;
+  });
+
+  setupConnections(wss);
+}
+
+/**
+ * 启动纯 WebSocket 服务（无 HTTP，给弹幕中继用）
+ * @param {number} port
+ */
+function startRelayWSS(port) {
   const wss = new WebSocketServer({ port });
 
   wss.on('listening', () => {
-    logger.info('WS', `Listening on port ${port}`);
+    logger.info('WS', `Relay WebSocket on port ${port}`);
   });
+
+  wss.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error('WS', `Relay port ${port} 已被占用`);
+      process.exit(1);
+    }
+    throw err;
+  });
+
+  setupConnections(wss);
+}
+
+/** 为 WSS 注册连接处理 */
+function setupConnections(wss) {
 
   wss.on('connection', (ws) => {
     logger.info('WS', `Client connected. Total: ${clients.size + 1}`);
@@ -108,4 +203,4 @@ function sendToPlayer(playerId, msg) {
   }
 }
 
-module.exports = { startWSServer, broadcast, onMessage, sendToPlayer };
+module.exports = { startWSServer, startRelayWSS, broadcast, onMessage, sendToPlayer };

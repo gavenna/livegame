@@ -22,17 +22,20 @@ const STATE = {
 const VALID_STATES = Object.values(STATE);
 
 class GameEngine {
-  constructor(cfg) {
+  constructor(cfg, db) {
     this.config = cfg;
     this.state = STATE.WAITING;
     this.round = 0;
     this.roundTimer = null;
     this.tickTimer = null;
     this.startTime = 0;
+    this.phaseStartedAt = 0;
 
     // 子系统
     this.battle = new Battle();
-    this.ranking = new Ranking();
+    this.db = db || null;
+    this.ranking = new Ranking(this.db);
+    if (this.db) this.ranking.load();
 
     // 游戏数据（每局重置）
     this.redTeam = { players: new Map(), castleHP: cfg.CASTLE_HP };
@@ -63,6 +66,21 @@ class GameEngine {
     logger.info('ENGINE', 'Stopped');
   }
 
+  /** 跳过 COUNTDOWN 直接开打 */
+  startPlaying() {
+    clearTimeout(this.roundTimer);
+    this.state = STATE.PLAYING;
+    this.phaseStartedAt = Date.now();
+    logger.info('ENGINE', `Round ${this.round} — PLAYING`);
+    this.pushState();
+
+    this.tickTimer = setInterval(() => this.tick(), this.config.BATTLE_TICK_MS);
+
+    this.roundTimer = setTimeout(() => {
+      this.endRound();
+    }, this.config.ROUND_TIME);
+  }
+
   startRound() {
     this.round++;
     this.state = STATE.COUNTDOWN;
@@ -73,26 +91,21 @@ class GameEngine {
     this.battle = new Battle();
     this.roundStats = { kills: new Map(), damageDealt: new Map(), gifts: new Map() };
     this.startTime = Date.now();
+    this.phaseStartedAt = Date.now();  // COUNTDOWN 阶段起点
 
     logger.info('ENGINE', `Round ${this.round} — COUNTDOWN (${this.config.PREP_TIME / 1000}s)`);
     this.pushState();
 
     this.roundTimer = setTimeout(() => {
-      this.state = STATE.PLAYING;
-      logger.info('ENGINE', `Round ${this.round} — PLAYING`);
-      this.pushState();
-
-      this.tickTimer = setInterval(() => this.tick(), this.config.BATTLE_TICK_MS);
-
-      this.roundTimer = setTimeout(() => {
-        this.endRound();
-      }, this.config.ROUND_TIME);
+      this.startPlaying();
     }, this.config.PREP_TIME);
   }
 
   endRound() {
     clearInterval(this.tickTimer);
+    clearTimeout(this.roundTimer);
     this.state = STATE.ROUND_END;
+    this.phaseStartedAt = Date.now();  // 结算阶段起点
 
     const duration = Math.round((Date.now() - this.startTime) / 1000);
     const winner = this.redTeam.castleHP > this.blueTeam.castleHP ? 'red'
@@ -242,6 +255,9 @@ class GameEngine {
       case 'gift':
         this.handleGift(msg.troopKey || msg.giftId, msg.playerId, msg.playerName);
         break;
+      case 'admin':
+        this.handleAdmin(msg.action);
+        break;
       default:
         logger.debug('ENGINE', `Unknown message type: ${msg.type}`);
     }
@@ -337,32 +353,84 @@ class GameEngine {
     }
   }
 
+  handleAdmin(action) {
+    logger.info('ENGINE', `Admin action: ${action} (state=${this.state})`);
+
+    switch (action) {
+      case 'skip_countdown':
+        if (this.state === STATE.COUNTDOWN) {
+          this.startPlaying();
+        }
+        break;
+      case 'end_round':
+        if (this.state === STATE.PLAYING) {
+          this.endRound();
+        }
+        break;
+      case 'reset':
+        clearInterval(this.tickTimer);
+        clearTimeout(this.roundTimer);
+        this.startRound();
+        break;
+      default:
+        logger.warn('ENGINE', `Unknown admin action: ${action}`);
+    }
+  }
+
   // ============================================================
   //  积分结算
   // ============================================================
 
   settleScores(winner) {
+    // 辅助：获取玩家名字
+    const getName = (playerId) => {
+      const rp = this.redTeam.players.get(playerId);
+      const bp = this.blueTeam.players.get(playerId);
+      return (rp || bp || {}).name || playerId;
+    };
+
     for (const [playerId, kills] of this.roundStats.kills) {
       let score = kills * this.config.SCORE.KILL;
       if (kills >= 10) score = Math.round(score * this.config.SCORE.MULTI_KILL_10);
       else if (kills >= 5) score = Math.round(score * this.config.SCORE.MULTI_KILL_5);
-      this.ranking.addScore(playerId, score);
+      this.ranking.addScore(playerId, score, getName(playerId));
     }
 
     if (winner !== 'draw') {
       const winTeam = winner === 'red' ? this.redTeam : this.blueTeam;
       for (const [playerId] of winTeam.players) {
-        this.ranking.addScore(playerId, this.config.SCORE.WIN_BONUS);
+        this.ranking.addScore(playerId, this.config.SCORE.WIN_BONUS, getName(playerId));
       }
     }
 
     const mvp = this.getTopPlayer('damageDealt', winner);
     const svp = this.getTopPlayer('damageDealt', winner === 'red' ? 'blue' : 'red');
-    if (mvp) this.ranking.addScore(mvp, this.config.SCORE.MVP_BONUS);
-    if (svp) this.ranking.addScore(svp, this.config.SCORE.SVP_BONUS);
+    if (mvp) this.ranking.addScore(mvp, this.config.SCORE.MVP_BONUS, getName(mvp));
+    if (svp) this.ranking.addScore(svp, this.config.SCORE.SVP_BONUS, getName(svp));
 
     for (const [playerId, giftValue] of this.roundStats.gifts) {
-      this.ranking.addScore(playerId, giftValue);
+      this.ranking.addScore(playerId, giftValue, getName(playerId));
+    }
+
+    // 持久化对局记录
+    if (this.db) {
+      const duration = Math.round((Date.now() - this.startTime) / 1000);
+      const result = this.db.insertRound(winner, duration);
+      const roundId = result.lastInsertRowid;
+
+      const allPlayerIds = new Set([
+        ...this.redTeam.players.keys(), ...this.blueTeam.players.keys(),
+      ]);
+      for (const pid of allPlayerIds) {
+        const team = this.redTeam.players.has(pid) ? 'red' : 'blue';
+        this.db.insertRoundPlayer(
+          roundId, pid, team,
+          this.roundStats.kills.get(pid) || 0,
+          this.roundStats.damageDealt.get(pid) || 0,
+          this.roundStats.gifts.get(pid) || 0,
+        );
+      }
+      logger.info('ENGINE', `Round ${this.round} 已写入 DB (id=${roundId})`);
     }
 
     logger.info('ENGINE', `MVP: ${mvp || 'none'} (+${this.config.SCORE.MVP_BONUS}), SVP: ${svp || 'none'} (+${this.config.SCORE.SVP_BONUS})`);
@@ -395,6 +463,12 @@ class GameEngine {
 
   /** 推送当前状态到前端 */
   pushState() {
+    const now = Date.now();
+    let phaseTotal = 0;
+    if (this.state === STATE.COUNTDOWN) phaseTotal = this.config.PREP_TIME;
+    else if (this.state === STATE.PLAYING) phaseTotal = this.config.ROUND_TIME;
+    else if (this.state === STATE.ROUND_END) phaseTotal = this.config.SETTLE_TIME;
+
     const state = {
       type: 'game_state',
       state: this.state,
@@ -408,7 +482,9 @@ class GameEngine {
         castleHP: this.blueTeam.castleHP,
       },
       frontLine: this.battle.frontLine,
-      time: Date.now() - this.startTime,
+      time: now - this.startTime,
+      phaseElapsed: now - this.phaseStartedAt,
+      phaseTotal,
       maxHP: this.config.CASTLE_HP,
     };
 

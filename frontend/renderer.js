@@ -25,6 +25,14 @@ let frameCount = 0;
 /** 弹幕滚动队列（自己维护，逐帧推进） */
 const danmakuQueue = [];
 
+/** 背景 + 城堡图片预加载 */
+const bgImage = new Image();
+bgImage.src = '/assets/sprites/battlefield.png';
+const castleRedImg = new Image();
+castleRedImg.src = '/assets/sprites/castle_red.png';
+const castleBlueImg = new Image();
+castleBlueImg.src = '/assets/sprites/castle_blue.png';
+
 /**
  * 主渲染循环
  */
@@ -83,15 +91,18 @@ function renderBattle(ctx, state) {
 
 /** 战场背景 */
 function drawBackground(ctx) {
-  // 天空渐变
+  // 优先使用战场背景图
+  if (bgImage.complete && bgImage.naturalWidth > 0) {
+    ctx.drawImage(bgImage, 0, 0, W, H);
+    return;
+  }
+  // fallback: 天空渐变 + 地面
   const grad = ctx.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, '#1a1a2e');
   grad.addColorStop(0.3, '#2d2d44');
   grad.addColorStop(1, '#3d2b1f');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-
-  // 地面
   ctx.fillStyle = '#2d5a1e';
   ctx.fillRect(0, H * 0.75, W, H * 0.25);
 }
@@ -102,30 +113,45 @@ function drawCastles(ctx, state) {
   const blueHP = state.blue ? state.blue.castleHP : 10000;
   const maxHP = state.maxHP || 10000;
 
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 28px Microsoft YaHei, sans-serif';
+  const redPct = redHP / maxHP;
+  const bluePct = blueHP / maxHP;
 
   // 红方城堡（左）
-  const redPct = redHP / maxHP;
-  ctx.fillStyle = '#8B4513';
-  ctx.fillRect(20, H * 0.5, 60, 120);
-  ctx.fillStyle = `rgb(${Math.round(255 * (1 - redPct))}, ${Math.round(100 * redPct)}, 0)`;
-  ctx.fillRect(25, H * 0.5 + 5, 50, 110 * redPct);
-  ctx.fillStyle = '#FF6666';
-  ctx.fillText('🏰', 50, H * 0.5 - 20);
-  ctx.font = '14px Microsoft YaHei, sans-serif';
-  ctx.fillText('炎龙', 50, H * 0.5 + 140);
+  if (castleRedImg.complete && castleRedImg.naturalWidth > 0) {
+    ctx.globalAlpha = 0.4 + redPct * 0.6; // 城堡受损时变暗
+    ctx.drawImage(castleRedImg, 10, H * 0.38, 160, 140);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(20, H * 0.5, 60, 120);
+  }
+  // HP 条
+  ctx.fillStyle = '#333';
+  ctx.fillRect(20, H * 0.48, 100, 8);
+  ctx.fillStyle = '#F44';
+  ctx.fillRect(20, H * 0.48, 100 * redPct, 8);
+  ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
+  ctx.fillStyle = '#FF8888';
+  ctx.textAlign = 'center';
+  ctx.fillText('炎龙帝国', 70, H * 0.46);
 
   // 蓝方城堡（右）
-  const bluePct = blueHP / maxHP;
-  ctx.fillStyle = '#4A4A6A';
-  ctx.fillRect(W - 80, H * 0.5, 60, 120);
-  ctx.fillStyle = `rgb(${Math.round(100 * bluePct)}, ${Math.round(100 * bluePct)}, ${Math.round(255 * (1 - bluePct))})`;
-  ctx.fillRect(W - 75, H * 0.5 + 5, 50, 110 * bluePct);
-  ctx.fillStyle = '#6699FF';
-  ctx.fillText('🏰', W - 50, H * 0.5 - 20);
-  ctx.font = '14px Microsoft YaHei, sans-serif';
-  ctx.fillText('霜狼', W - 50, H * 0.5 + 140);
+  if (castleBlueImg.complete && castleBlueImg.naturalWidth > 0) {
+    ctx.globalAlpha = 0.4 + bluePct * 0.6;
+    ctx.drawImage(castleBlueImg, W - 170, H * 0.38, 160, 140);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = '#4A4A6A';
+    ctx.fillRect(W - 80, H * 0.5, 60, 120);
+  }
+  // HP 条
+  ctx.fillStyle = '#333';
+  ctx.fillRect(W - 120, H * 0.48, 100, 8);
+  ctx.fillStyle = '#48F';
+  ctx.fillRect(W - 120, H * 0.48, 100 * bluePct, 8);
+  ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
+  ctx.fillStyle = '#8888FF';
+  ctx.fillText('霜狼联盟', W - 70, H * 0.46);
 }
 
 /** 弹幕层 */

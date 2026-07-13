@@ -8,7 +8,8 @@
 module.exports = {
   // === 服务器 ===
   WS_PORT: 8765,
-  FRONTEND_PORT: 3000,
+  RELAY_PORT: 8766,                 // 弹幕中继 WS 端口（bilibili-relay.py 连这个）
+  DB_PATH: 'data/war-danmaku.db',   // SQLite 数据库路径
 
   // === 游戏循环 ===
   ROUND_TIME: 20 * 60 * 1000,       // 单局最大时长 20分钟（ms）
