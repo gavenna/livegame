@@ -45,7 +45,7 @@ function preloadSprites() {
   const keys = Object.keys(SPRITE_DEFS);
   for (const key of keys) {
     const img = new Image();
-    img.src = `/assets/sprites/${key}.png`;
+    img.src = `/assets/sprites/${key}.png?v=3`;
     img.onload = () => { imageCache[key] = img; };
     img.onerror = () => { /* 保持 undefined，走 fallback */ };
   }
@@ -69,20 +69,10 @@ function drawSprite(ctx, troop, scale) {
   }
 
   const facingRight = troop.team === 'red';
-  const img = imageCache[key];
-
-  // 确定显示尺寸：有图用图片比例，无图用 SPRITE_DEFS
-  let dispW, dispH;
-  if (img && img.complete && img.naturalWidth > 0) {
-    dispH = def.h * s;
-    dispW = dispH * (img.naturalWidth / img.naturalHeight);
-  } else {
-    dispW = def.w * s;
-    dispH = def.h * s;
-  }
-
-  const drawX = x - dispW / 2;
-  const drawY = y - dispH + yOffset;
+  const drawW = def.w * s;
+  const drawH = def.h * s;
+  const drawX = x - drawW / 2;
+  const drawY = y - drawH + yOffset;
 
   ctx.save();
 
@@ -92,14 +82,16 @@ function drawSprite(ctx, troop, scale) {
     ctx.shadowBlur = 10;
   }
 
+  const img = imageCache[key];
+
   if (img && img.complete && img.naturalWidth > 0) {
-    // —— PNG 精灵图渲染（裁切后角色填满整图，按比例缩放）——
+    // —— PNG 精灵图渲染 ——
     if (facingRight) {
-      ctx.drawImage(img, drawX, drawY, dispW, dispH);
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
     } else {
       ctx.translate(x, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(img, -dispW / 2, drawY, dispW, dispH);
+      ctx.drawImage(img, -drawW / 2, drawY, drawW, drawH);
     }
   } else {
     // —— 几何图形 fallback ——
@@ -107,18 +99,18 @@ function drawSprite(ctx, troop, scale) {
       ctx.fillStyle = FALLBACK_COLORS[key] || '#888';
       ctx.strokeStyle = teamColor;
       ctx.lineWidth = 2;
-      ctx.fillRect(drawX, drawY, dispW, dispH);
-      ctx.strokeRect(drawX, drawY, dispW, dispH);
+      ctx.fillRect(drawX, drawY, drawW, drawH);
+      ctx.strokeRect(drawX, drawY, drawW, drawH);
     }
     if (def.mounted) {
       ctx.fillStyle = '#8B6914';
-      ctx.fillRect(drawX - 2, drawY + dispH * 0.55, dispW + 4, dispH * 0.45);
+      ctx.fillRect(drawX - 2, drawY + drawH * 0.55, drawW + 4, drawH * 0.45);
     }
     if (def.ranged) {
       ctx.strokeStyle = '#DEB887';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(x, drawY + dispH * 0.4, dispW * 0.6, 0, Math.PI);
+      ctx.arc(x, drawY + drawH * 0.4, drawW * 0.6, 0, Math.PI);
       ctx.stroke();
     }
   }
@@ -127,7 +119,7 @@ function drawSprite(ctx, troop, scale) {
 
   // HP 条
   if (troop.hp !== undefined && troop.maxHp && troop.hp < troop.maxHp) {
-    const barW = dispW + 6;
+    const barW = drawW + 6;
     const barH = 4;
     const barY = drawY - 8;
     const hpPct = Math.max(0, troop.hp / troop.maxHp);

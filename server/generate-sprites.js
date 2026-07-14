@@ -141,7 +141,7 @@ async function run() {
 
   for (const task of TASKS) {
     const outPath = path.join(OUT_DIR, `${task.key}.png`);
-    if (fs.existsSync(outPath)) {
+    if (fs.existsSync(outPath) && !process.argv.includes('--force')) {
       console.log(`[Gen] ⏭ ${task.key} — 已存在，跳过`);
       generated++;
       continue;
