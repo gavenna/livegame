@@ -60,7 +60,7 @@ function drawSprite(ctx, troop, scale) {
   const teamColor = troop.team === 'red' ? '#FF4444' : '#4488FF';
   const x = troop.x || 0;
   const y = troop.y || 540;
-  const s = scale !== undefined ? scale : 1;  // B3: spawn animation scale
+  const s = scale !== undefined ? scale : 1;
 
   // 飞行兵种上下浮动
   let yOffset = 0;
@@ -68,12 +68,21 @@ function drawSprite(ctx, troop, scale) {
     yOffset = Math.sin(Date.now() * 0.003 + (troop.id || 0) * 0.01) * 10;
   }
 
-  // 红方朝右，蓝方朝左
   const facingRight = troop.team === 'red';
-  const drawW = def.w * s;
-  const drawH = def.h * s;
-  const drawX = x - drawW / 2;
-  const drawY = y - drawH + yOffset;
+  const img = imageCache[key];
+
+  // 确定显示尺寸：有图用图片比例，无图用 SPRITE_DEFS
+  let dispW, dispH;
+  if (img && img.complete && img.naturalWidth > 0) {
+    dispH = def.h * s;
+    dispW = dispH * (img.naturalWidth / img.naturalHeight);
+  } else {
+    dispW = def.w * s;
+    dispH = def.h * s;
+  }
+
+  const drawX = x - dispW / 2;
+  const drawY = y - dispH + yOffset;
 
   ctx.save();
 
@@ -83,17 +92,14 @@ function drawSprite(ctx, troop, scale) {
     ctx.shadowBlur = 10;
   }
 
-  const img = imageCache[key];
-
   if (img && img.complete && img.naturalWidth > 0) {
-    // —— PNG 精灵图渲染 ——
+    // —— PNG 精灵图渲染（裁切后角色填满整图，按比例缩放）——
     if (facingRight) {
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      ctx.drawImage(img, drawX, drawY, dispW, dispH);
     } else {
-      // 蓝方面向左 → 水平翻转
       ctx.translate(x, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(img, -drawW / 2, drawY, drawW, drawH);
+      ctx.drawImage(img, -dispW / 2, drawY, dispW, dispH);
     }
   } else {
     // —— 几何图形 fallback ——
@@ -101,31 +107,27 @@ function drawSprite(ctx, troop, scale) {
       ctx.fillStyle = FALLBACK_COLORS[key] || '#888';
       ctx.strokeStyle = teamColor;
       ctx.lineWidth = 2;
-      ctx.fillRect(drawX, drawY, drawW, drawH);
-      ctx.strokeRect(drawX, drawY, drawW, drawH);
+      ctx.fillRect(drawX, drawY, dispW, dispH);
+      ctx.strokeRect(drawX, drawY, dispW, dispH);
     }
-
-    // 骑兵马身
     if (def.mounted) {
       ctx.fillStyle = '#8B6914';
-      ctx.fillRect(drawX - 2, drawY + drawH * 0.55, drawW + 4, drawH * 0.45);
+      ctx.fillRect(drawX - 2, drawY + dispH * 0.55, dispW + 4, dispH * 0.45);
     }
-
-    // 弓手武器
     if (def.ranged) {
       ctx.strokeStyle = '#DEB887';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(x, drawY + drawH * 0.4, drawW * 0.6, 0, Math.PI);
+      ctx.arc(x, drawY + dispH * 0.4, dispW * 0.6, 0, Math.PI);
       ctx.stroke();
     }
   }
 
   ctx.shadowBlur = 0;
 
-  // HP 条（仅损血时显示）
+  // HP 条
   if (troop.hp !== undefined && troop.maxHp && troop.hp < troop.maxHp) {
-    const barW = drawW + 6;
+    const barW = dispW + 6;
     const barH = 4;
     const barY = drawY - 8;
     const hpPct = Math.max(0, troop.hp / troop.maxHp);
