@@ -45,6 +45,7 @@ assets/sprites/*.png
 assets/sprites/*.jpg
 assets/sprites/*.psd
 assets/sprites/*.ai
+frontend/assets/sprites/
 
 # Secrets (API keys)
 server/secrets.json

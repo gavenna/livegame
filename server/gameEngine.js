@@ -44,6 +44,15 @@ class GameEngine {
     // 本局统计
     this.roundStats = { kills: new Map(), damageDealt: new Map(), gifts: new Map() };
 
+    // D1: 加速计时器 { team: { playerId: timeoutId } }
+    this.speedBoostTimers = { red: {}, blue: {} };
+
+    // D2: 指令冷却 { playerId: { command: lastUsedTime } }
+    this.commandCooldowns = new Map();
+
+    // D2: 冷却配置 (ms)
+    this.COOLDOWNS = { spawn_militia_3: 3000, speed_boost: 5000 };
+
     // 事件队列（本 tick 产生的事件，推给前端后清空）
     this.pendingEvents = [];
 
@@ -78,7 +87,7 @@ class GameEngine {
 
     this.roundTimer = setTimeout(() => {
       this.endRound();
-    }, this.config.ROUND_TIME);
+    }, this.config.ROUND_TIME_EFF);
   }
 
   startRound() {
@@ -93,12 +102,12 @@ class GameEngine {
     this.startTime = Date.now();
     this.phaseStartedAt = Date.now();  // COUNTDOWN 阶段起点
 
-    logger.info('ENGINE', `Round ${this.round} — COUNTDOWN (${this.config.PREP_TIME / 1000}s)`);
+    logger.info('ENGINE', `Round ${this.round} — COUNTDOWN (${this.config.PREP_TIME_EFF / 1000}s)`);
     this.pushState();
 
     this.roundTimer = setTimeout(() => {
       this.startPlaying();
-    }, this.config.PREP_TIME);
+    }, this.config.PREP_TIME_EFF);
   }
 
   endRound() {
@@ -120,7 +129,7 @@ class GameEngine {
 
     this.roundTimer = setTimeout(() => {
       this.startRound();
-    }, this.config.SETTLE_TIME);
+    }, this.config.SETTLE_TIME_EFF);
   }
 
   // ============================================================
@@ -207,33 +216,33 @@ class GameEngine {
     const redCount = this.redTeam.players.size;
     const blueCount = this.blueTeam.players.size;
 
+    // 计算人数平衡倍率
+    let minority = null;
+    let outnumberMult = 0;
     if (redCount > 0 && blueCount > 0) {
       const ratio = Math.max(redCount, blueCount) / Math.min(redCount, blueCount);
       if (ratio > bal.OUTNUMBER_RATIO) {
-        const minority = redCount < blueCount ? 'red' : 'blue';
-        logger.info('ENGINE', `人数平衡触发: ${minority}方人数劣势 (ratio=${ratio.toFixed(1)}), 伤害+${Math.round(bal.OUTNUMBER_BUFF * 100)}%`);
-        for (const t of this.battle.troops) {
-          if (t.team === minority && !t._balanced) {
-            t.damage = Math.round(t.damage * (1 + bal.OUTNUMBER_BUFF));
-            t._balanced = true;
-          }
-        }
+        minority = redCount < blueCount ? 'red' : 'blue';
+        outnumberMult = bal.OUTNUMBER_BUFF;
       }
     }
 
+    // 劣势城堡倍率
     const redHpRatio = this.redTeam.castleHP / this.config.CASTLE_HP;
     const blueHpRatio = this.blueTeam.castleHP / this.config.CASTLE_HP;
+
     for (const t of this.battle.troops) {
-      if (t.team === 'red' && redHpRatio < bal.COMEBACK_THRESHOLD && !t._comeback) {
-        t.damage = Math.round(t.damage * (1 + bal.COMEBACK_BUFF));
-        t._comeback = true;
-        logger.info('ENGINE', `劣势鼓舞: 红方城堡<${Math.round(bal.COMEBACK_THRESHOLD * 100)}% 伤害+${Math.round(bal.COMEBACK_BUFF * 100)}%`);
-      }
-      if (t.team === 'blue' && blueHpRatio < bal.COMEBACK_THRESHOLD && !t._comeback) {
-        t.damage = Math.round(t.damage * (1 + bal.COMEBACK_BUFF));
-        t._comeback = true;
-        logger.info('ENGINE', `劣势鼓舞: 蓝方城堡<${Math.round(bal.COMEBACK_THRESHOLD * 100)}% 伤害+${Math.round(bal.COMEBACK_BUFF * 100)}%`);
-      }
+      // 存储原始伤害（首次）
+      if (!t._origDmg) t._origDmg = t.damage;
+
+      let mult = 1;
+      if (t.team === minority) mult += outnumberMult;
+
+      if (t.team === 'red' && redHpRatio < bal.COMEBACK_THRESHOLD) mult += bal.COMEBACK_BUFF;
+      if (t.team === 'blue' && blueHpRatio < bal.COMEBACK_THRESHOLD) mult += bal.COMEBACK_BUFF;
+
+      // 可逆：每 tick 重算，buff 消失时自动恢复
+      t.damage = Math.round(t._origDmg * mult);
     }
   }
 
@@ -308,24 +317,34 @@ class GameEngine {
       case 'join_blue':
         this.handleJoin('blue', playerId, playerName);
         break;
-      case 'spawn_militia_3':
+      case 'spawn_militia_3': {
+        // D2: 冷却检查
+        if (this.isOnCooldown(playerId, cmd)) {
+          logger.debug('DANMAKU', `"${text}" 冷却中 — ${playerName || playerId}`);
+          return;
+        }
+        this.setCooldown(playerId, cmd);
         if (this.state === STATE.PLAYING) {
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
         }
         break;
-      case 'speed_boost':
+      }
+      case 'speed_boost': {
+        // D2: 冷却检查
+        if (this.isOnCooldown(playerId, cmd)) {
+          logger.debug('DANMAKU', `"${text}" 冷却中 — ${playerName || playerId}`);
+          return;
+        }
+        this.setCooldown(playerId, cmd);
         if (this.state === STATE.PLAYING) {
-          for (const t of this.battle.troops) {
-            if (t.team === actualTeam) {
-              t.speed = t.speed * 1.3;
-            }
-          }
+          this.applySpeedBoost(actualTeam, playerId);
           this.pendingEvents.push({ type: 'speed_boost', team: actualTeam, playerId, playerName, time: Date.now() });
-          logger.info('ENGINE', `${playerName || playerId} 吹响冲锋号! ${actualTeam}方全体加速`);
+          logger.info('ENGINE', `${playerName || playerId} 吹响冲锋号! ${actualTeam}方全体加速 8s`);
         }
         break;
+      }
     }
   }
 
@@ -344,12 +363,35 @@ class GameEngine {
     }
 
     let actualKey = this.config.DOUYIN_GIFT_MAP[troopKey] || troopKey;
+    const troopDef = this.config.TROOPS[actualKey];
+    const isPremium = troopDef && troopDef.cost >= 99 && !troopDef.globalSkill && !troopDef.siege;
 
-    const troop = this.battle.spawnTroop(team, actualKey, playerId, playerName);
-    if (troop) {
-      const giftScore = troop.damage * this.config.SCORE.GIFT_MULTIPLIER;
-      this.addStat('gifts', playerId, giftScore);
-      logger.info('GIFT', `${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
+    if (isPremium) {
+      // D4: 高级兵种预告 → 1s 后生成
+      const troopName = troopDef.name;
+      this.pendingEvents.push({
+        type: 'spawn_preview',
+        team, key: actualKey, ownerId: playerId, ownerName: playerName,
+        text: `${playerName || playerId} 正在召唤 ${troopName}！`,
+        time: Date.now(),
+      });
+      logger.info('GIFT', `${playerName || playerId} 预告召唤 ${actualKey}`);
+
+      setTimeout(() => {
+        const delayed = this.battle.spawnTroop(team, actualKey, playerId, playerName);
+        if (delayed) {
+          const giftScore = delayed.damage * this.config.SCORE.GIFT_MULTIPLIER;
+          this.addStat('gifts', playerId, giftScore);
+          logger.info('GIFT', `${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${delayed.damage} 积分:+${giftScore})`);
+        }
+      }, 1000);
+    } else {
+      const troop = this.battle.spawnTroop(team, actualKey, playerId, playerName);
+      if (troop) {
+        const giftScore = troop.damage * this.config.SCORE.GIFT_MULTIPLIER;
+        this.addStat('gifts', playerId, giftScore);
+        logger.info('GIFT', `${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
+      }
     }
   }
 
@@ -465,9 +507,9 @@ class GameEngine {
   pushState() {
     const now = Date.now();
     let phaseTotal = 0;
-    if (this.state === STATE.COUNTDOWN) phaseTotal = this.config.PREP_TIME;
-    else if (this.state === STATE.PLAYING) phaseTotal = this.config.ROUND_TIME;
-    else if (this.state === STATE.ROUND_END) phaseTotal = this.config.SETTLE_TIME;
+    if (this.state === STATE.COUNTDOWN) phaseTotal = this.config.PREP_TIME_EFF;
+    else if (this.state === STATE.PLAYING) phaseTotal = this.config.ROUND_TIME_EFF;
+    else if (this.state === STATE.ROUND_END) phaseTotal = this.config.SETTLE_TIME_EFF;
 
     const state = {
       type: 'game_state',
@@ -486,6 +528,7 @@ class GameEngine {
       phaseElapsed: now - this.phaseStartedAt,
       phaseTotal,
       maxHP: this.config.CASTLE_HP,
+      devMode: this.config.DEV_MODE,
     };
 
     if (this.state === STATE.PLAYING || this.state === STATE.ROUND_END) {
@@ -513,6 +556,54 @@ class GameEngine {
     }
 
     broadcast(state);
+  }
+
+  // === D1: 加速系统 ===
+
+  /** 应用加速效果（8s 后自动恢复） */
+  applySpeedBoost(team, playerId) {
+    const boostKey = `${playerId}_${Date.now()}`;
+    const origSpeeds = new Map();
+
+    for (const t of this.battle.troops) {
+      if (t.team === team) {
+        origSpeeds.set(t.id, t.speed);
+        t.speed = t.speed * 1.3;
+      }
+    }
+
+    if (origSpeeds.size === 0) return;
+
+    // 8s 后恢复
+    const timerId = setTimeout(() => {
+      for (const t of this.battle.troops) {
+        if (t.team === team && origSpeeds.has(t.id)) {
+          t.speed = origSpeeds.get(t.id);
+        }
+      }
+      delete this.speedBoostTimers[team][boostKey];
+      logger.debug('ENGINE', `${team}方 加速效果结束`);
+    }, 8000);
+
+    this.speedBoostTimers[team][boostKey] = timerId;
+  }
+
+  // === D2: 指令冷却 ===
+
+  isOnCooldown(playerId, command) {
+    const playerCD = this.commandCooldowns.get(playerId);
+    if (!playerCD) return false;
+    const cdMs = this.COOLDOWNS[command];
+    if (!cdMs) return false;
+    const lastUsed = playerCD[command] || 0;
+    return (Date.now() - lastUsed) < cdMs;
+  }
+
+  setCooldown(playerId, command) {
+    if (!this.commandCooldowns.has(playerId)) {
+      this.commandCooldowns.set(playerId, {});
+    }
+    this.commandCooldowns.get(playerId)[command] = Date.now();
   }
 }
 

@@ -6,6 +6,9 @@
  */
 
 module.exports = {
+  // === 开发模式 ===
+  DEV_MODE: true,                    // true=调试模式（缩短回合时间），上线前改 false
+
   // === 服务器 ===
   WS_PORT: 8765,
   RELAY_PORT: 8766,                 // 弹幕中继 WS 端口（bilibili-relay.py 连这个）
@@ -14,8 +17,13 @@ module.exports = {
   // === 游戏循环 ===
   ROUND_TIME: 20 * 60 * 1000,       // 单局最大时长 20分钟（ms）
   PREP_TIME: 30 * 1000,             // 准备阶段 30秒
-  SETTLE_TIME: 20 * 1000,           // 结算展示 20秒
+  SETTLE_TIME: 10 * 1000,           // 结算展示 10秒
   BATTLE_TICK_MS: 100,              // 战斗计算 tick 间隔 100ms (10tps)
+
+  // DEV_MODE 覆盖（调试时自动缩短）
+  get PREP_TIME_EFF() { return this.DEV_MODE ? 5 * 1000 : this.PREP_TIME; },
+  get ROUND_TIME_EFF() { return this.DEV_MODE ? 3 * 60 * 1000 : this.ROUND_TIME; },
+  get SETTLE_TIME_EFF() { return this.DEV_MODE ? 6 * 1000 : this.SETTLE_TIME; },
 
   // === 城堡 ===
   CASTLE_HP: 10000,                 // 城堡初始血量

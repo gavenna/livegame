@@ -54,12 +54,13 @@ function preloadSprites() {
 /**
  * 绘制兵种到 Canvas
  */
-function drawSprite(ctx, troop) {
+function drawSprite(ctx, troop, scale) {
   const key = troop.key || 'militia';
   const def = SPRITE_DEFS[key] || SPRITE_DEFS.militia;
   const teamColor = troop.team === 'red' ? '#FF4444' : '#4488FF';
   const x = troop.x || 0;
   const y = troop.y || 540;
+  const s = scale !== undefined ? scale : 1;  // B3: spawn animation scale
 
   // 飞行兵种上下浮动
   let yOffset = 0;
@@ -69,8 +70,8 @@ function drawSprite(ctx, troop) {
 
   // 红方朝右，蓝方朝左
   const facingRight = troop.team === 'red';
-  const drawW = def.w;
-  const drawH = def.h;
+  const drawW = def.w * s;
+  const drawH = def.h * s;
   const drawX = x - drawW / 2;
   const drawY = y - drawH + yOffset;
 

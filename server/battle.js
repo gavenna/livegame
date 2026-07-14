@@ -215,7 +215,7 @@ class Battle {
       }
     }
 
-    // === 4. 恐惧效果（龙骑士） ===
+    // === 4. 恐惧效果（龙骑士，持续 debuff） ===
     for (const t of this.troops) {
       if (t.fear && t.hp > 0) {
         const enemies = t.team === 'red' ? blueTroops : redTroops;
@@ -223,10 +223,25 @@ class Battle {
           if (enemy.hp <= 0) continue;
           const dist = Math.abs(t.x - enemy.x);
           if (dist < bal.COLLISION_RANGE * 3) {
-            if (enemy.team === 'red') enemy.x = Math.max(50, enemy.x - 20);
-            else enemy.x = Math.min(CANVAS_W - 50, enemy.x + 20);
+            // 施加恐惧 debuff（3s）
+            if (!enemy._fearedUntil || enemy._fearedUntil < now) {
+              enemy._origSpeed = enemy.speed;
+              enemy._fearedUntil = now + 3000;
+              enemy.speed = enemy.speed * 0.5;
+            }
+            // 击退
+            if (enemy.team === 'red') enemy.x = Math.max(50, enemy.x - 15);
+            else enemy.x = Math.min(CANVAS_W - 50, enemy.x + 15);
           }
         }
+      }
+    }
+    // 清理过期恐惧 debuff
+    for (const t of this.troops) {
+      if (t._fearedUntil && t._fearedUntil < now && t._origSpeed !== undefined) {
+        t.speed = t._origSpeed;
+        t._fearedUntil = null;
+        t._origSpeed = undefined;
       }
     }
 
