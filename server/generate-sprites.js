@@ -34,7 +34,7 @@ const STYLE = [
 const TASKS = [
   // === 8 兵种 ===
   { key: 'militia', size: '512x512', desc: 'A militia soldier holding a pitchfork, wearing a simple cloth tunic, no armor, humble peasant warrior appearance.' },
-  { key: 'swordsman', size: '512x512', desc: 'A swordsman in chainmail armor, holding a long straight sword and a round wooden shield, confident battle stance.' },
+  { key: 'swordsman', size: '512x512', desc: 'A medieval warrior in chainmail armor with a round wooden shield, confident battle stance, epic fantasy style.' },
   { key: 'knight', size: '512x512', desc: 'A knight riding a brown warhorse, wearing full plate armor, holding a long cavalry lance, majestic.' },
   { key: 'archer', size: '512x512', desc: 'An archer in leather armor, drawing a longbow with an arrow ready, quiver on back, agile stance.' },
   { key: 'catapult', size: '768x512', desc: 'A wooden catapult siege engine with 4 wheels, loaded with a stone projectile, medieval war machine.' },

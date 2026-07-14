@@ -45,7 +45,7 @@ function preloadSprites() {
   const keys = Object.keys(SPRITE_DEFS);
   for (const key of keys) {
     const img = new Image();
-    img.src = `/assets/sprites/${key}.png?v=3`;
+    img.src = `/assets/sprites/${key}.png?v=4`;
     img.onload = () => { imageCache[key] = img; };
     img.onerror = () => { /* 保持 undefined，走 fallback */ };
   }
