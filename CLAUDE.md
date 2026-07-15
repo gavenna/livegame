@@ -9,9 +9,14 @@
 node server/index.js                    # 启动游戏服务器 (WebSocket :8765)
 npx http-server frontend -p 3000 -c-1  # 启动前端 (OBS 浏览器源 http://localhost:3000)
 node --check server/*.js               # JS 语法检查
+node server/quicktest-anim.js           # 一键动画测试（启动 server + 自动出兵）
+python server/stitch-sprites.py         # 拼接精灵图水平条（依赖 Pillow）
+node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（实验，未采用）
 ```
 
-开发时开两个终端：一个跑 server，一个跑 frontend。浏览器打开 `http://localhost:3000` 看到游戏画面。
+开发时开一个终端跑 `node server/quicktest-anim.js`，浏览器打开 `http://localhost:3000` 看到游戏画面。
+
+> `gen-anim-frames.js` 和 `stitch-sprites.py` 是 AI 图生图路线的实验产物。经调研 `agnes-image-2.0-flash` 无法保持角色一致性，当前采用纯程序化动画（`sprites.js`），这两个脚本仅供将来参考。
 
 ## 架构
 

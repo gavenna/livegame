@@ -122,6 +122,7 @@ module.exports = {
 
   // === 兵种动画 ===
   ANIMATION: {
+    IDLE_AFTER_SPAWN: 600,        // 出生后 idle 停留时间 (ms)
     IDLE_FRAMES: 4,               // idle 帧数（呼吸循环）
     IDLE_FRAME_MS: 150,           // idle 帧间隔 → 总周期 600ms
     WALK_FRAMES: 6,               // walk 帧数（闭口走步循环）

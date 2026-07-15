@@ -153,7 +153,6 @@ class Battle {
     }
 
     // === 2. 兵种移动 + 动画状态 ===
-    const IDLE_AFTER_SPAWN = 600;      // 出生后 idle 持续时间 (ms)
     const HALT_RANGE = bal.COLLISION_RANGE;       // 接敌停止距离 = 交战距离
 
     // 先收集所有存活兵种位置，用于判定是否应停止
@@ -183,7 +182,7 @@ class Battle {
       }
 
       // 出生后短暂 idle，然后切 walk（有敌人在附近时切 attack）
-      if (now - t.createdAt < IDLE_AFTER_SPAWN) {
+      if (now - t.createdAt < anim.IDLE_AFTER_SPAWN) {
         t.animState = 'idle';
       } else {
         t.animState = hasEnemyNearby ? 'attack' : 'walk';
