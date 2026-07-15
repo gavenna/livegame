@@ -159,6 +159,25 @@
       <button class="btn-util" onclick="admin('end_round')" id="btn-end" style="border-color:rgba(255,80,80,0.3);color:#f66">⏹ 结束本局</button>
       <button class="btn-util" onclick="admin('reset')" style="border-color:rgba(255,255,255,0.1);color:#888">↻ 重置</button>
     </div>
+
+    <h3>调试 & 微调</h3>
+    <div class="row">
+      <button class="btn-util" id="btn-debug" onclick="toggleDebug()" style="border-color:rgba(100,255,100,0.3);color:#5f5">🔍 调试网格</button>
+      <button class="btn-util" id="btn-lb" onclick="toggleLB()" style="border-color:rgba(255,215,0,0.3);color:#da5">👁 排行榜</button>
+      <button class="btn-util" onclick="admin('reset_rankings')" style="border-color:rgba(255,100,100,0.25);color:#f66;font-size:10px">🔄 重置排行</button>
+    </div>
+    <div class="row" style="margin-top:2px">
+      <button class="btn-util" onclick="copyPOS()" style="font-size:10px;border-color:rgba(255,255,255,0.15);color:#aaa">📋 复制POS</button>
+      <button class="btn-util" onclick="applyPOS()" style="font-size:10px;border-color:rgba(100,200,255,0.25);color:#8cf">✅ 应用JSON</button>
+    </div>
+    <textarea id="pos-json" placeholder="粘贴 POS JSON 覆盖值...&#10;例: {&quot;castleBar&quot;:{&quot;y&quot;:70}}"
+      style="width:100%;height:60px;font:9px monospace;background:rgba(0,0,0,0.5);color:#aaa;border:1px solid rgba(255,255,255,0.1);border-radius:3px;resize:vertical;margin-top:2px"></textarea>
+    <div style="color:#555;font-size:9px;margin-top:-2px;line-height:1.3">
+      💡 <b>拖拽调参</b>（推荐）：<br>
+      开启🔍→画面出现<span style="color:#fff">白色方块手柄</span>→拖动手柄即改位置<br>
+      拖完后值输出到Console→记下来贴到 ui.js 固化<br>
+      📋 调好后点"复制POS"→粘贴到 ui.js → 固化
+    </div>
     <input id="panel-name" type="text" placeholder="你的名字（可选）" maxlength="12"
       style="width:100%;padding:4px 8px;font-size:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#ccc;font-family:inherit;">
 
@@ -212,6 +231,7 @@
 <script src="sprites.js"></script>
 <script src="ui.js"></script>
 <script src="renderer.js"></script>
+
 
 <script>
   // === 控制面板逻辑 ===
@@ -289,6 +309,95 @@
     if (elSkip) elSkip.style.display = state.state === 'COUNTDOWN' ? '' : 'none';
     if (elEnd) elEnd.style.display = state.state === 'PLAYING' ? '' : 'none';
   };
+
+    // HTML status div 始终隐藏（Canvas 状态徽章已提供相同信息）
+    document.getElementById('status').style.display = 'none';
+
+  // === 调试工具 ===
+  var _posSnapshot = null; // 开启调试时的 POS 快照，用于 diff
+
+  function toggleDebug() {
+    const on = window.toggleDebugMode();
+    const btn = document.getElementById('btn-debug');
+    if (btn) {
+      btn.style.background = on ? 'rgba(100,255,100,0.25)' : '';
+      btn.style.color = on ? '#0f0' : '#5f5';
+      btn.textContent = on ? '🔍 网格 ON' : '🔍 调试网格';
+    }
+    // 开启时保存 POS 快照
+    if (on && window.UI_POS) _posSnapshot = JSON.parse(JSON.stringify(window.UI_POS));
+    if (!on) _posSnapshot = null;
+    console.log('[Debug] 调试网格:', on ? 'ON' : 'OFF');
+  }
+
+  function toggleLB() {
+    const on = window.toggleLeaderboard();
+    const btn = document.getElementById('btn-lb');
+    if (btn) {
+      btn.style.background = !on ? 'rgba(255,80,80,0.2)' : '';
+      btn.style.color = on ? '#da5' : '#f66';
+      btn.textContent = on ? '👁 排行 ON' : '👁 排行 OFF';
+    }
+    console.log('[Debug] 排行榜:', on ? '显示' : '隐藏');
+  }
+
+  // 📋 复制变更的 POS 字段（diff 快照）
+  function copyPOS() {
+    var cur = window.UI_POS;
+    if (!cur) return;
+    // 深比较，只取变更的叶子字段
+    function diff(snap, curr, path) {
+      var result = {};
+      for (var k in curr) {
+        var cp = path ? path + '.' + k : k;
+        if (snap && typeof curr[k] === 'object' && !Array.isArray(curr[k]) && typeof snap[k] === 'object') {
+          var sub = diff(snap[k], curr[k], cp);
+          if (Object.keys(sub).length) result[k] = sub;
+        } else if (!snap || JSON.stringify(curr[k]) !== JSON.stringify(snap ? snap[k] : undefined)) {
+          result[k] = curr[k];
+        }
+      }
+      return result;
+    }
+    var changed = _posSnapshot ? diff(_posSnapshot, cur, '') : cur;
+    var json = JSON.stringify(changed, null, 2);
+    var full = JSON.stringify(cur, null, 2);
+    navigator.clipboard.writeText(json).then(function() {
+      console.log('📋 变更字段已复制 (' + json.length + ' bytes)');
+      if (json === '{}') console.log('   (无变更，所有值等于快照)');
+      console.log('   完整 POS:', full);
+    }).catch(function() {
+      console.log('📋 变更:', json);
+      console.log('📋 完整:', full);
+    });
+  }
+
+  // ✅ 从 JSON 合并覆盖 POS
+  function applyPOS() {
+    var ta = document.getElementById('pos-json');
+    if (!ta || !ta.value.trim()) return;
+    try {
+      var overrides = JSON.parse(ta.value);
+      var pos = window.UI_POS;
+      if (!pos) return;
+      // 浅合并顶层 key，深合并一层
+      for (var key in overrides) {
+        if (typeof overrides[key] === 'object' && typeof pos[key] === 'object') {
+          Object.assign(pos[key], overrides[key]);
+        } else {
+          pos[key] = overrides[key];
+        }
+      }
+      console.log('✅ POS 已更新。当前值:', JSON.stringify(pos, null, 2));
+      ta.style.borderColor = 'rgba(100,255,100,0.5)';
+      setTimeout(function() { ta.style.borderColor = 'rgba(255,255,255,0.1)'; }, 800);
+    } catch (e) {
+      console.error('❌ JSON 解析失败:', e.message);
+      var ta2 = document.getElementById('pos-json');
+      if (ta2) { ta2.style.borderColor = 'rgba(255,80,80,0.6)';
+      setTimeout(function() { ta2.style.borderColor = 'rgba(255,255,255,0.1)'; }, 800); }
+    }
+  }
 
   console.log('[Panel] Ready. playerId:', PLAYER_ID);
 </script>

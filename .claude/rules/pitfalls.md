@@ -261,6 +261,24 @@ if (gen !== genRef.current) return; // 过期丢弃
 
 ### G7. ctx.restore() 放错位置 → UI 元素随动画乱飞
 
+---
+
+### G8. `const` 声明在普通 `<script>` 之间冲突
+
+**症状**：页面全黑/白屏，Console 报 `Uncaught SyntaxError: Identifier 'X' has already been declared`。
+
+**根因**：多个普通 `<script>`（非 `type="module"`）共享全局作用域，两个文件都声明 `const W = 1920` 就会冲突。`node --check` 单文件检查不出来。
+
+**哪类 agent 会踩**：任何在多个前端 JS 文件中定义变量的
+
+**修复/预防**：
+1. 用 `var` 替代顶层 `const`（允许重复声明）
+2. 或用不同变量名（如 `_W`、`_H`）
+3. 或包装 IIFE `(function() { ... })()`
+4. 或加 `type="module"` 到 `<script>` 标签（但需改所有 `window.xxx` 为 `export`）
+
+**排查方式**：浏览器 F12 → Console 看第一行报错，通常是 `renderer.js:1` 这类"还没进去就死了"的位置。
+
 **症状**：兵种主人名字飞到屏幕角落上下跳动。
 
 **根因**：`ctx.restore()` 写在 HP 条和名字绘制之后，UI 元素受 drawWithAnim() 内的 translate/scale/rotate 污染。

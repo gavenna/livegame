@@ -78,6 +78,16 @@ class Ranking {
     return rank;
   }
 
+  /** 重置所有排行榜数据 */
+  reset() {
+    this.players.clear();
+    if (this.db) {
+      this.db.db.exec('DELETE FROM round_players');
+      this.db.db.exec('DELETE FROM rounds');
+      this.db.db.exec('DELETE FROM players');
+    }
+  }
+
   /** 获取排行榜（Top N） */
   getLeaderboard(n = 10) {
     const sorted = [...this.players.values()]

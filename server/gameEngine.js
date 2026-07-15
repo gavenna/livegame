@@ -416,6 +416,11 @@ class GameEngine {
         clearTimeout(this.roundTimer);
         this.startRound();
         break;
+      case 'reset_rankings':
+        this.ranking.reset();
+        logger.info('ENGINE', '排行榜已重置');
+        this.pushState();
+        break;
       default:
         logger.warn('ENGINE', `Unknown admin action: ${action}`);
     }

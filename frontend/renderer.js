@@ -87,6 +87,7 @@ siegeImg.src = '/assets/sprites/siege_impact.png';
  */
 function gameLoop(timestamp) {
   requestAnimationFrame(gameLoop);
+  try {
 
   const elapsed = timestamp - lastFrameTime;
   if (elapsed < FRAME_MS) return;
@@ -105,6 +106,8 @@ function gameLoop(timestamp) {
   renderBattle(battleCtx, state);
   if (window.renderUI) window.renderUI(uiCtx, state);
   renderDanmaku(danmakuCtx, state);
+
+  } catch (e) { console.error('[gameLoop] 渲染崩溃:', e.message, e.stack); }
 }
 
 /** 事件去重：跟踪已处理的 events 数组 */
@@ -371,58 +374,82 @@ function drawBackground(ctx) {
 
 /** 城堡（含 E2 受损表现） */
 function drawCastles(ctx, state) {
+  const P = window.UI_POS ? window.UI_POS.castle : null;
   const redHP = state.red ? state.red.castleHP : 10000;
   const blueHP = state.blue ? state.blue.castleHP : 10000;
   const maxHP = state.maxHP || 10000;
   const redPct = redHP / maxHP;
   const bluePct = blueHP / maxHP;
 
-  // 红方城堡（左）
+  // 红方城堡（左）— 图片
+  const ri = P ? P.redImg : { x: 10, y: H * 0.38, w: 160, h: 140 };
+  const rcx = ri.x + ri.w / 2;  // 红方城堡中心 X
+  const rcy = ri.y + ri.h / 2;
+
   if (castleRedImg.complete && castleRedImg.naturalWidth > 0) {
     ctx.globalAlpha = 0.4 + redPct * 0.6;
-    ctx.drawImage(castleRedImg, 10, H * 0.38, 160, 140);
+    ctx.drawImage(castleRedImg, ri.x, ri.y, ri.w, ri.h);
     ctx.globalAlpha = 1;
-    // E2: 受损冒烟/冒火
-    drawCastleDamageOverlay(ctx, 90, H * 0.38 + 70, redPct, 'red');
+    drawCastleDamageOverlay(ctx, rcx, rcy, redPct, 'red');
   } else {
     ctx.fillStyle = '#8B4513';
-    ctx.fillRect(20, H * 0.5, 60, 120);
+    ctx.fillRect(ri.x + 10, H * 0.5, 60, 120);
   }
 
-  // HP 条
+  // 红方 HP 条（battle 层小血条）
+  const rhp = P ? P.hpBar : { redX: 20, y: H * 0.48, w: 100, h: 8 };
+  const rhpCX = rhp.redX + rhp.w / 2;
   ctx.fillStyle = '#333';
-  ctx.fillRect(20, H * 0.48, 100, 8);
+  ctx.fillRect(rhp.redX, rhp.y, rhp.w, rhp.h);
   ctx.fillStyle = redPct > 0.3 ? '#F44' : '#F00';
-  ctx.fillRect(20, H * 0.48, 100 * redPct, 8);
+  ctx.fillRect(rhp.redX, rhp.y, rhp.w * redPct, rhp.h);
+
+  // 红方名字
+  const rnY = P && P.nameY ? P.nameY.red : H * 0.46;
   ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
   ctx.fillStyle = '#FF8888';
   ctx.textAlign = 'center';
-  ctx.fillText('炎龙帝国', 70, H * 0.46);
-  // HP 数字
-  ctx.font = '11px Microsoft YaHei, sans-serif';
-  ctx.fillText(Math.round(redHP) + ' HP', 70, H * 0.5 + 130);
+  ctx.fillText('炎龙帝国', rhpCX, rnY);
 
-  // 蓝方城堡（右）
+  // 红方 HP 数字
+  ctx.font = '11px Microsoft YaHei, sans-serif';
+  ctx.fillText(Math.round(redHP) + ' HP', rhpCX, rhp.y + rhp.h + 28);
+
+  // 蓝方城堡（右）— 图片
+  const bi = P ? P.blueImg : { x: W - 170, y: H * 0.38, w: 160, h: 140 };
+  const bcx = bi.x + bi.w / 2;
+  const bcy = bi.y + bi.h / 2;
+
   if (castleBlueImg.complete && castleBlueImg.naturalWidth > 0) {
     ctx.globalAlpha = 0.4 + bluePct * 0.6;
-    ctx.drawImage(castleBlueImg, W - 170, H * 0.38, 160, 140);
+    ctx.drawImage(castleBlueImg, bi.x, bi.y, bi.w, bi.h);
     ctx.globalAlpha = 1;
-    drawCastleDamageOverlay(ctx, W - 90, H * 0.38 + 70, bluePct, 'blue');
+    drawCastleDamageOverlay(ctx, bcx, bcy, bluePct, 'blue');
   } else {
     ctx.fillStyle = '#4A4A6A';
-    ctx.fillRect(W - 80, H * 0.5, 60, 120);
+    ctx.fillRect(bi.x + 10, H * 0.5, 60, 120);
   }
 
-  // HP 条
+  // 蓝方 HP 条（battle 层小血条）
+  const bhp = P ? {
+    x: P.hpBar.blueRightX - P.hpBar.w,
+    y: P.hpBar.y, w: P.hpBar.w, h: P.hpBar.h
+  } : { x: W - 120, y: H * 0.48, w: 100, h: 8 };
+  const bhpCX = bhp.x + bhp.w / 2;
   ctx.fillStyle = '#333';
-  ctx.fillRect(W - 120, H * 0.48, 100, 8);
+  ctx.fillRect(bhp.x, bhp.y, bhp.w, bhp.h);
   ctx.fillStyle = bluePct > 0.3 ? '#48F' : '#00F';
-  ctx.fillRect(W - 120, H * 0.48, 100 * bluePct, 8);
+  ctx.fillRect(bhp.x, bhp.y, bhp.w * bluePct, bhp.h);
+
+  // 蓝方名字
+  const bnY = P && P.nameY ? P.nameY.blue : H * 0.46;
   ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
   ctx.fillStyle = '#8888FF';
-  ctx.fillText('霜狼联盟', W - 70, H * 0.46);
+  ctx.fillText('霜狼联盟', bhpCX, bnY);
+
+  // 蓝方 HP 数字
   ctx.font = '11px Microsoft YaHei, sans-serif';
-  ctx.fillText(Math.round(blueHP) + ' HP', W - 70, H * 0.5 + 130);
+  ctx.fillText(Math.round(blueHP) + ' HP', bhpCX, bhp.y + bhp.h + 28);
 }
 
 /** E2: 城堡受损覆盖层 */
@@ -627,11 +654,12 @@ function renderDanmaku(ctx, state) {
   }
 
   // C6: 三轨弹幕布局
-  const tracks = [H - 60, H - 110, H - 160];
-  const trackUsed = [false, false, false];
+  const POS = window.UI_POS || { danmaku: { tracks: [H - 60, H - 110, H - 160], maxVisible: 6, lifetime: 3000 } };
+  const tracks = POS.danmaku.tracks;
+  const trackUsed = tracks.map(() => false);
 
   // 限制同时显示 6 条
-  while (danmakuQueue.length > 6) danmakuQueue.shift();
+  while (danmakuQueue.length > POS.danmaku.maxVisible) danmakuQueue.shift();
 
   // 为每条弹幕分配轨道
   ctx.font = '20px Microsoft YaHei, sans-serif';
@@ -696,9 +724,38 @@ function hexToRgba(hex, alpha) {
 // 启动渲染循环
 requestAnimationFrame(gameLoop);
 
+// === 鼠标追踪（调试用） ===
+const gameContainer = document.getElementById('game-container');
+if (gameContainer) {
+  gameContainer.addEventListener('mousemove', (e) => {
+    const rect = gameContainer.getBoundingClientRect();
+    const scaleX = 1920 / rect.width;
+    const scaleY = 1080 / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top) * scaleY;
+    if (window.setMousePos) window.setMousePos(cx, cy);
+  });
+  gameContainer.addEventListener('mouseleave', () => {
+    if (window.setMousePos) window.setMousePos(-1, -1);
+  });
+  // 点击时在控制台打印坐标
+  gameContainer.addEventListener('click', (e) => {
+    const rect = gameContainer.getBoundingClientRect();
+    const scaleX = 1920 / rect.width;
+    const scaleY = 1080 / rect.height;
+    const cx = Math.round((e.clientX - rect.left) * scaleX);
+    const cy = Math.round((e.clientY - rect.top) * scaleY);
+    console.log(`📍 点击坐标: X:${cx}  Y:${cy}`);
+  });
+}
+
 // WS 状态更新时触发
 window.onStateUpdate = (state) => {
   if (window.renderUI) window.renderUI(uiCtx, state);
 };
 
 console.log('[Renderer] Loop started at', FPS, 'fps');
+console.log('[Renderer] Canvas check — battle:', !!battleCtx, 'ui:', !!uiCtx, 'danmaku:', !!danmakuCtx);
+console.log('[Renderer] UI_POS:', window.UI_POS ? 'OK' : 'MISSING');
+console.log('[Renderer] drawSprite:', typeof window.drawSprite);
+console.log('[Renderer] renderUI:', typeof window.renderUI);
