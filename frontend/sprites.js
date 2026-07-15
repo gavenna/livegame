@@ -2,7 +2,7 @@
  * 兵种精灵绘制
  *
  * Phase 3: 优先使用 AI 生成的 PNG 精灵图，缺失时回退几何图形。
- * 图片路径: /assets/sprites/<key>.png
+ * Phase 6: 程序化动画 — idle 呼吸 / walk 弹跳倾斜 / attack 前冲 / death 缩小渐隐旋转。
  */
 
 /** 显示尺寸（游戏世界中的像素大小） */
@@ -21,129 +21,142 @@ const SPRITE_DEFS = {
   warChest:    { w: 24, h: 24, label: '' },
 };
 
-// 几何图形 fallback 颜色
 const FALLBACK_COLORS = {
-  militia:     '#8B7355',
-  swordsman:   '#C0C0C0',
-  knight:      '#4169E1',
-  archer:      '#228B22',
-  catapult:    '#8B4513',
-  royalGuard:  '#FFD700',
-  giant:       '#A0522D',
-  dragonKnight:'#FF4500',
-  fireArrow:   '#FF6347',
-  wrathOfGod:  '#FFD700',
-  batteringRam:'#8B4513',
-  warChest:    '#DAA520',
+  militia:     '#8B7355', swordsman: '#C0C0C0', knight:    '#4169E1',
+  archer:      '#228B22', catapult:  '#8B4513', royalGuard:'#FFD700',
+  giant:       '#A0522D', dragonKnight:'#FF4500', fireArrow: '#FF6347',
+  wrathOfGod:  '#FFD700', batteringRam:'#8B4513', warChest:  '#DAA520',
 };
 
-/** 预加载的图片缓存 */
 const imageCache = {};
+const animTrackers = {};
 
-/** 加载所有精灵图 */
 function preloadSprites() {
-  const keys = Object.keys(SPRITE_DEFS);
-  for (const key of keys) {
+  for (const key of Object.keys(SPRITE_DEFS)) {
     const img = new Image();
     img.src = `/assets/sprites/${key}.png?v=4`;
     img.onload = () => { imageCache[key] = img; };
-    img.onerror = () => { /* 保持 undefined，走 fallback */ };
+    img.onerror = () => {};
   }
 }
 
-/**
- * 绘制兵种到 Canvas
- */
-function drawSprite(ctx, troop, scale) {
+function drawSprite(ctx, troop, scale, now) {
   const key = troop.key || 'militia';
   const def = SPRITE_DEFS[key] || SPRITE_DEFS.militia;
   const teamColor = troop.team === 'red' ? '#FF4444' : '#4488FF';
-  const x = troop.x || 0;
-  const y = troop.y || 540;
+  const x = troop.x || 0, y = troop.y || 540;
   const s = scale !== undefined ? scale : 1;
+  const tNow = now || Date.now();
 
-  // 飞行兵种上下浮动
   let yOffset = 0;
-  if (def.flying) {
-    yOffset = Math.sin(Date.now() * 0.003 + (troop.id || 0) * 0.01) * 10;
-  }
+  if (def.flying) yOffset = Math.sin(tNow * 0.003 + (troop.id || 0) * 0.01) * 10;
 
   const facingRight = troop.team === 'red';
-  const drawW = def.w * s;
-  const drawH = def.h * s;
-  const drawX = x - drawW / 2;
-  const drawY = y - drawH + yOffset;
+  const drawW = def.w * s, drawH = def.h * s;
+  const drawX = x - drawW / 2, drawY = y - drawH + yOffset;
 
   ctx.save();
-
-  // 精英/首领发光
-  if (def.elite || def.boss) {
-    ctx.shadowColor = teamColor;
-    ctx.shadowBlur = 10;
-  }
+  if (def.elite || def.boss) { ctx.shadowColor = teamColor; ctx.shadowBlur = 10; }
 
   const img = imageCache[key];
-
   if (img && img.complete && img.naturalWidth > 0) {
-    // —— PNG 精灵图渲染 ——
-    if (facingRight) {
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
-    } else {
-      ctx.translate(x, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, -drawW / 2, drawY, drawW, drawH);
-    }
+    drawWithAnim();
   } else {
-    // —— 几何图形 fallback ——
-    if (facingRight) {
-      ctx.fillStyle = FALLBACK_COLORS[key] || '#888';
-      ctx.strokeStyle = teamColor;
-      ctx.lineWidth = 2;
-      ctx.fillRect(drawX, drawY, drawW, drawH);
-      ctx.strokeRect(drawX, drawY, drawW, drawH);
-    }
-    if (def.mounted) {
-      ctx.fillStyle = '#8B6914';
-      ctx.fillRect(drawX - 2, drawY + drawH * 0.55, drawW + 4, drawH * 0.45);
-    }
-    if (def.ranged) {
-      ctx.strokeStyle = '#DEB887';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(x, drawY + drawH * 0.4, drawW * 0.6, 0, Math.PI);
-      ctx.stroke();
-    }
+    drawFallback();
   }
 
   ctx.shadowBlur = 0;
+  ctx.restore();
 
-  // HP 条
-  if (troop.hp !== undefined && troop.maxHp && troop.hp < troop.maxHp) {
-    const barW = drawW + 6;
-    const barH = 4;
-    const barY = drawY - 8;
+  if (troop.animState !== 'death' && troop.hp !== undefined && troop.maxHp && troop.hp < troop.maxHp) {
+    const barW = drawW + 6, barH = 4, barY = drawY - 8;
     const hpPct = Math.max(0, troop.hp / troop.maxHp);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(x - barW / 2, barY, barW, barH);
+    ctx.fillStyle = '#333'; ctx.fillRect(x - barW / 2, barY, barW, barH);
     ctx.fillStyle = hpPct > 0.5 ? '#4F4' : hpPct > 0.25 ? '#FF0' : '#F44';
     ctx.fillRect(x - barW / 2, barY, barW * hpPct, barH);
   }
 
-  // 拥有者名字
-  if (troop.showAvatar && troop.ownerName) {
-    ctx.font = '10px Microsoft YaHei, sans-serif';
-    ctx.fillStyle = '#FFF';
-    ctx.textAlign = 'center';
-    ctx.fillText(troop.ownerName.slice(0, 6), x, drawY - 12);
+  if (troop.animState !== 'death' && troop.showAvatar && troop.ownerName) {
+    ctx.font = '10px Microsoft YaHei, sans-serif'; ctx.fillStyle = '#FFF';
+    ctx.textAlign = 'center'; ctx.fillText(troop.ownerName.slice(0, 6), x, drawY - 12);
   }
 
-  ctx.restore();
+  // -- 内部函数 --
+
+  function drawWithAnim() {
+    const animState = troop.animState || 'idle';
+
+    let tracker = animTrackers[troop.id];
+    if (!tracker || tracker.lastState !== animState) {
+      tracker = { lastState: animState, stateStartedAt: tNow };
+      animTrackers[troop.id] = tracker;
+    }
+    const elapsed = tNow - tracker.stateStartedAt;
+
+    let fX = drawX, fY = drawY, fW = drawW, fH = drawH;
+    let breathe = 1, tilt = 0;
+
+    if (animState === 'idle') {
+      // 呼吸缩放 ±3%
+      breathe = 1 + Math.sin(tNow * 0.004) * 0.03;
+
+    } else if (animState === 'walk') {
+      // 弹跳 2px + 倾斜 0.04rad
+      fY += Math.sin(tNow * 0.008) * 2;
+      tilt = Math.sin(tNow * 0.008) * 0.04;
+
+    } else if (animState === 'attack') {
+      // 前冲→回退 (480ms 循环)
+      const phase = (elapsed % 480) / 480;
+      const lunge = phase < 0.3 ? phase / 0.3 * 5 : (1 - (phase - 0.3) / 0.7) * 3;
+      const lx = facingRight ? lunge : -lunge;
+      fX += lx; fY += phase < 0.3 ? -1 : 2;
+      fW += lunge * 0.3; fH += lunge * 0.2;
+
+    } else if (animState === 'death') {
+      // 缩小+下沉+渐隐+旋转 (720ms)
+      const p = Math.min(1, elapsed / 720);
+      ctx.globalAlpha = 1 - p;
+      fY += p * 15;
+      fW *= 1 - p * 0.4; fH *= 1 - p * 0.4;
+      fX += (drawW - fW) / 2; fY += (drawH - fH) / 2;
+      ctx.translate(x, fY + fH); ctx.rotate(facingRight ? p * 0.5 : -p * 0.5); ctx.translate(-x, -(fY + fH));
+    }
+
+    // 应用 transform
+    ctx.translate(x, fY + fH / 2);
+    ctx.scale(breathe, breathe);
+    if (tilt) ctx.rotate(tilt);
+    ctx.translate(-x, -(fY + fH / 2));
+
+    if (facingRight) {
+      ctx.drawImage(img, fX, fY, fW, fH);
+    } else {
+      ctx.translate(x, 0); ctx.scale(-1, 1);
+      ctx.drawImage(img, -(fW / 2), fY, fW, fH);
+    }
+  }
+
+  function drawFallback() {
+    if (facingRight) {
+      ctx.fillStyle = FALLBACK_COLORS[key] || '#888';
+      ctx.strokeStyle = teamColor; ctx.lineWidth = 2;
+      ctx.fillRect(drawX, drawY, drawW, drawH);
+      ctx.strokeRect(drawX, drawY, drawW, drawH);
+    }
+    if (def.mounted) { ctx.fillStyle = '#8B6914'; ctx.fillRect(drawX - 2, drawY + drawH * 0.55, drawW + 4, drawH * 0.45); }
+    if (def.ranged) { ctx.strokeStyle = '#DEB887'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, drawY + drawH * 0.4, drawW * 0.6, 0, Math.PI); ctx.stroke(); }
+  }
 }
 
-// 启动时预加载
-preloadSprites();
+function cleanupTrackers(activeTroopIds) {
+  const idSet = new Set(activeTroopIds);
+  for (const id of Object.keys(animTrackers)) {
+    if (!idSet.has(Number(id))) delete animTrackers[id];
+  }
+}
 
-// 导出
+preloadSprites();
 window.SPRITE_DEFS = SPRITE_DEFS;
 window.drawSprite = drawSprite;
-window.preloadSprites = preloadSprites;
+window.cleanupTrackers = cleanupTrackers;

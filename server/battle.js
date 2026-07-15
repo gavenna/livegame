@@ -66,6 +66,9 @@ class Battle {
       showAvatar: actualDef.showAvatar || false,
       avatarSize: actualDef.avatarSize || 0,
       avatarTime: actualDef.avatarTime || 0,
+      // 动画状态
+      animState: 'idle',
+      _deathStartedAt: 0,
     };
 
     // 全局技能立即生效，不加入 troops 数组
@@ -125,10 +128,19 @@ class Battle {
     const dt = deltaMs / 1000;
     const bal = config.BALANCE;
 
-    // === 1. 清理过期兵种 ===
+    // === 1. 清理过期/死亡兵种 ===
     const now = Date.now();
+    const anim = config.ANIMATION;
     const oldLen = this.troops.length;
+
+    // 移除已完成死亡动画的兵种
     this.troops = this.troops.filter(t => {
+      if (t.animState === 'death') {
+        if (now - t._deathStartedAt > anim.DEATH_DURATION) {
+          return false;
+        }
+        return true; // 保留，继续播放死亡动画
+      }
       const age = now - t.createdAt;
       if (age > bal.MAX_TROOP_AGE) {
         this.events.push({ type: 'expire', troopId: t.id, team: t.team, key: t.key, time: now });
@@ -137,23 +149,67 @@ class Battle {
       return true;
     });
     if (oldLen !== this.troops.length) {
-      logger.debug('BATTLE', `过期清理: ${oldLen - this.troops.length} 兵种 (剩余 ${this.troops.length})`);
+      logger.debug('BATTLE', `清理: ${oldLen - this.troops.length} 兵种 (剩余 ${this.troops.length})`);
     }
 
-    // === 2. 兵种移动 ===
+    // === 2. 兵种移动 + 动画状态 ===
+    const IDLE_AFTER_SPAWN = 600;      // 出生后 idle 持续时间 (ms)
+    const HALT_RANGE = bal.COLLISION_RANGE;       // 接敌停止距离 = 交战距离
+
+    // 先收集所有存活兵种位置，用于判定是否应停止
+    const allAlive = this.troops.filter(t => t.animState !== 'death' && t.hp > 0);
+
     for (const t of this.troops) {
+      if (t.animState === 'death') continue;
       if (t.speed <= 0) continue;
-      const moveX = t.speed * bal.SPEED_FACTOR;
-      if (t.team === 'red') {
-        t.x = Math.min(t.x + moveX, CANVAS_W - 50);
+
+      // 检查前方是否有敌人，有就停下战斗
+      const enemies = allAlive.filter(e => e.team !== t.team);
+      let hasEnemyNearby = false;
+      for (const enemy of enemies) {
+        if (Math.abs(t.x - enemy.x) < HALT_RANGE) {
+          hasEnemyNearby = true;
+          break;
+        }
+      }
+
+      if (!hasEnemyNearby) {
+        const moveX = t.speed * bal.SPEED_FACTOR;
+        if (t.team === 'red') {
+          t.x = Math.min(t.x + moveX, CANVAS_W - 50);
+        } else {
+          t.x = Math.max(t.x - moveX, 50);
+        }
+      }
+
+      // 出生后短暂 idle，然后切 walk（有敌人在附近时切 attack）
+      if (now - t.createdAt < IDLE_AFTER_SPAWN) {
+        t.animState = 'idle';
       } else {
-        t.x = Math.max(t.x - moveX, 50);
+        t.animState = hasEnemyNearby ? 'attack' : 'walk';
       }
     }
 
-    // === 3. 交战计算 ===
-    const redTroops = this.troops.filter(t => t.team === 'red' && t.hp > 0);
-    const blueTroops = this.troops.filter(t => t.team === 'blue' && t.hp > 0);
+    // === 3. 攻击动画判定（在交战计算之前，确保攻击状态可见） ===
+    const aliveTroops = this.troops.filter(t => t.animState !== 'death');
+    const redTroops = aliveTroops.filter(t => t.team === 'red' && t.hp > 0);
+    const blueTroops = aliveTroops.filter(t => t.team === 'blue' && t.hp > 0);
+    const attackRange = bal.COLLISION_RANGE * anim.ATTACK_RANGE_FACTOR;
+
+    for (const t of aliveTroops) {
+      if (t.hp <= 0) continue;
+      const enemies = t.team === 'red' ? blueTroops : redTroops;
+      for (const enemy of enemies) {
+        if (enemy.hp <= 0) continue;
+        if (Math.abs(t.x - enemy.x) < attackRange) {
+          t.animState = 'attack';
+          enemy.animState = 'attack'; // 双方都显示攻击动画
+          break;
+        }
+      }
+    }
+
+    // === 4. 交战计算 ===
 
     let redTotalDmg = 0;
     let blueTotalDmg = 0;
@@ -215,8 +271,9 @@ class Battle {
       }
     }
 
-    // === 4. 恐惧效果（龙骑士，持续 debuff） ===
+    // === 5. 恐惧效果（龙骑士，持续 debuff） ===
     for (const t of this.troops) {
+      if (t.animState === 'death') continue;
       if (t.fear && t.hp > 0) {
         const enemies = t.team === 'red' ? blueTroops : redTroops;
         for (const enemy of enemies) {
@@ -238,6 +295,7 @@ class Battle {
     }
     // 清理过期恐惧 debuff
     for (const t of this.troops) {
+      if (t.animState === 'death') continue;
       if (t._fearedUntil && t._fearedUntil < now && t._origSpeed !== undefined) {
         t.speed = t._origSpeed;
         t._fearedUntil = null;
@@ -245,10 +303,16 @@ class Battle {
       }
     }
 
-    // === 5. 移除死亡兵种 ===
-    const beforeDead = this.troops.length;
-    this.troops = this.troops.filter(t => t.hp > 0);
-    const deadCount = beforeDead - this.troops.length;
+    // === 5. 标记死亡兵种（保留播死亡动画） ===
+    let deadCount = 0;
+    for (const t of this.troops) {
+      if (t.animState === 'death') continue; // 已在死亡动画中
+      if (t.hp <= 0) {
+        t.animState = 'death';
+        t._deathStartedAt = now;
+        deadCount++;
+      }
+    }
 
     // === 6. 更新战线 ===
     const dmgDiff = redTotalDmg - blueTotalDmg;

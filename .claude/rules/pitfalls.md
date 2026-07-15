@@ -241,3 +241,28 @@ if (gen !== genRef.current) return; // 过期丢弃
 **根因**：`localhost:8765` 是 WebSocket 游戏服务器（不提供前端页面），`localhost:3000` 才是前端静态文件服务器。用户在 8765 看到的是浏览器缓存的旧页面或服务器的基础 HTTP 响应。
 
 **修复/预防**：始终确认用户在 `localhost:3000` 查看游戏画面。8765 只处理 WebSocket 连接和游戏逻辑。
+
+---
+
+### G6. 图生图 API 不保持角色一致性
+
+**症状**：以现有精灵图为输入，img2img 生成的"同角色不同姿态"图片，颜色、比例、细节全变了。
+
+**根因**：`agnes-image-2.0-flash` 把输入图当作"风格参考"而非"像素锚点"。同厂商文生图模型也不支持。
+
+**哪类 agent 会踩**：`artist`、任何想用 AI 生成动画帧的
+
+**修复/预防**：
+1. 当前 API 做不到角色一致性 → 程序化动画是唯一可行路线
+2. 两个模型都输出 RGB 无 Alpha，如需透明必须 rembg
+3. API 忽略 `size` 参数，始终返回 1024²
+
+---
+
+### G7. ctx.restore() 放错位置 → UI 元素随动画乱飞
+
+**症状**：兵种主人名字飞到屏幕角落上下跳动。
+
+**根因**：`ctx.restore()` 写在 HP 条和名字绘制之后，UI 元素受 drawWithAnim() 内的 translate/scale/rotate 污染。
+
+**修复/预防**：`ctx.restore()` 紧跟在 drawImage 之后、UI 元素之前。动画 transform 和 UI 渲染用 save/restore 隔离。

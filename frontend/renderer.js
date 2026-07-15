@@ -148,19 +148,15 @@ function processEvents(state) {
         break;
       case 'kill':
         dmText = `💀 ${evt.killerName} 击杀敌方 ${evt.key}`;
-        // B2: 击杀闪光
+        // B2: 击杀闪光 — 用死亡兵种坐标（兵种仍在数组中播死亡动画）
         if (window.gameState && window.gameState.troops) {
           const deadTroop = window.gameState.troops.find(t => t.id === evt.troopId);
-          // Dead troop may already be gone — use the last known position from deathAnims
-        }
-        // 尝试从死亡动画中找位置
-        const da = deathAnims.find(d => d.key === evt.key && Date.now() - d.time < 200);
-        if (!da) {
-          // 在战场中间区域随机位置放闪光
-          const killX = evt.team === 'red' ? W * 0.4 : W * 0.6;
-          killFlashes.push({ x: killX, y: H * 0.5 + Math.random() * 100, time: now });
-        } else {
-          killFlashes.push({ x: da.x, y: da.y, time: now });
+          if (deadTroop) {
+            killFlashes.push({ x: deadTroop.x, y: deadTroop.y, time: now });
+          } else {
+            const killX = evt.team === 'red' ? W * 0.4 : W * 0.6;
+            killFlashes.push({ x: killX, y: H * 0.5 + Math.random() * 100, time: now });
+          }
         }
         // C2: 连杀追踪
         playerKillCounts[evt.killerId] = (playerKillCounts[evt.killerId] || 0) + 1;
@@ -265,14 +261,24 @@ function renderBattle(ctx, state) {
 
   // 兵种（带生成/死亡动画）
   if (state.troops && window.drawSprite) {
+    const now = Date.now();
+    const activeIds = [];
+
     for (const troop of state.troops) {
-      // B3: 检查是否有生成动画
-      const spawnAnim = spawnAnims.find(a => a.troopId === troop.id);
-      const scale = spawnAnim ? Math.min(1, (Date.now() - spawnAnim.time) / 300) : 1;
-      // 弹性缓出
+      // B3: 检查是否有生成动画（仅非死亡兵种）
+      const spawnAnim = troop.animState !== 'death'
+        ? spawnAnims.find(a => a.troopId === troop.id)
+        : null;
+      const scale = spawnAnim ? Math.min(1, (now - spawnAnim.time) / 300) : 1;
       const easedScale = spawnAnim ? elasticOut(scale) : 1;
 
-      window.drawSprite(ctx, troop, easedScale);
+      window.drawSprite(ctx, troop, easedScale, now);
+      activeIds.push(troop.id);
+    }
+
+    // 清理已移除兵种的动画追踪器
+    if (window.cleanupTrackers) {
+      window.cleanupTrackers(activeIds);
     }
   }
 

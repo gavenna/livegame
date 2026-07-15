@@ -156,8 +156,45 @@ clean readable silhouette
 
 ---
 
-## 七、修订记录
+## 八、动画帧规范
+
+> Phase 6: 兵种帧动画。图生图 (agnes-image-2.0-flash) 以现有精灵图为底图生成各状态关键帧。
+
+### 8.1 动画状态与帧数
+
+| 状态 | 帧数 | 帧间隔 | 总时长 | 说明 |
+|------|:----:|:------:|:------:|------|
+| idle | 4 | 150ms | 600ms | 呼吸循环，帧 0 复用现有精灵图 |
+| walk | 6 | 100ms | 600ms | 闭口走步循环 (contact→down→passing→up→contact-opp→down-opp) |
+| attack | 4 | 120ms | 480ms | 蓄力(1)→挥砍(1)→命中(1)→收招(1) |
+| death | 4 | 180ms | 720ms | 受击(1)→踉跄(1)→倒地(1)→静止(1) |
+
+### 8.2 生成方式
+
+使用 `gen-anim-frames.js` 脚本，逐帧图生图：
+- 输入: `frontend/assets/sprites/<key>.png`（现有精灵图，base64 URI）
+- 模型: `agnes-image-2.0-flash`
+- 每帧 prompt: `"Same character, same art style, identical appearance. Only change pose: <姿态描述>"`
+- 输出: `frontend/assets/sprites/frames/<key>_<state>_<n>.png`
+
+### 8.3 Sprite Sheet 格式
+
+18 帧水平排列：`[idle×4][walk×6][attack×4][death×4]`
+
+每帧尺寸 = 显示尺寸（SPRITE_DEFS），由 `stitch-sprites.py` 完成拼接。
+
+### 8.4 帧间一致性要求
+
+- 角色外观、颜色、比例必须与底图一致（图生图天然保证）
+- 武器/盔甲/盾牌在所有帧中保持相同
+- 脚部锚定在同一水平线（stitch 时自动对齐）
+- 不支持动画帧的兵种（fireArrow/wrathOfGod/batteringRam/warChest）不生成，回退静态渲染
+
+---
+
+## 九、修订记录
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-07-15 | v1.1 | 新增 §8 动画帧规范（Phase 6 帧动画） |
 | 2026-07-13 | v1.0 | 初始版本：风格定义、调色板、尺寸、兵种规范、质量标准 |

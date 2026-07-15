@@ -232,6 +232,7 @@ class GameEngine {
     const blueHpRatio = this.blueTeam.castleHP / this.config.CASTLE_HP;
 
     for (const t of this.battle.troops) {
+      if (t.animState === 'death') continue;
       // 存储原始伤害（首次）
       if (!t._origDmg) t._origDmg = t.damage;
 
@@ -251,17 +252,18 @@ class GameEngine {
   // ============================================================
 
   handleMessage(msg) {
-    assert.playerId(msg.playerId, 'handleMessage');
-
     switch (msg.type) {
       case 'join':
+        assert.playerId(msg.playerId, 'handleMessage:join');
         assert.validTeam(msg.team);
         this.handleJoin(msg.team, msg.playerId, msg.playerName);
         break;
       case 'danmaku':
+        assert.playerId(msg.playerId, 'handleMessage:danmaku');
         this.handleDanmaku(msg.text, msg.playerId, msg.playerName);
         break;
       case 'gift':
+        assert.playerId(msg.playerId, 'handleMessage:gift');
         this.handleGift(msg.troopKey || msg.giftId, msg.playerId, msg.playerName);
         break;
       case 'admin':
@@ -547,6 +549,7 @@ class GameEngine {
         elite: t.key === 'royalGuard',
         boss: t.key === 'giant' || t.key === 'dragonKnight',
         ranged: t.ranged,
+        animState: t.animState || 'idle',
       }));
 
       state.leaderboard = this.ranking.getLeaderboard(10);
@@ -566,6 +569,7 @@ class GameEngine {
     const origSpeeds = new Map();
 
     for (const t of this.battle.troops) {
+      if (t.animState === 'death') continue;
       if (t.team === team) {
         origSpeeds.set(t.id, t.speed);
         t.speed = t.speed * 1.3;

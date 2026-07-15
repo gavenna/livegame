@@ -48,22 +48,23 @@ module.exports = {
 
   // === 兵种定义 ===
   // 每个兵种 = 一个付费档位
+  // HP 上调 5x，伤害下调 2x（高费兵），确保战斗时长足够展示动画
   TROOPS: {
     // 免费层
-    militia:  { name: '民兵',   damage: 1,   hp: 10,  speed: 1.0, cost: 0,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
+    militia:  { name: '民兵',   damage: 1,   hp: 50,  speed: 1.0, cost: 0,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
     // 入门层 (~1元)
-    swordsman:{ name: '剑士',   damage: 5,   hp: 30,  speed: 1.2, cost: 1,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
-    knight:   { name: '骑士',   damage: 25,  hp: 80,  speed: 2.0, cost: 5,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
+    swordsman:{ name: '剑士',   damage: 3,   hp: 150, speed: 1.2, cost: 1,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
+    knight:   { name: '骑士',   damage: 12,  hp: 400, speed: 2.0, cost: 5,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
     // 进阶层 (1~10元)
-    archer:   { name: '弓手',   damage: 40,  hp: 25,  speed: 1.0, cost: 10,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['knight'] },
-    catapult: { name: '投石车', damage: 120, hp: 50,  speed: 0.5, cost: 30,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    aoe: true,     counters: ['archer'] },
+    archer:   { name: '弓手',   damage: 20,  hp: 125, speed: 1.0, cost: 10,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['knight'] },
+    catapult: { name: '投石车', damage: 60,  hp: 250, speed: 0.5, cost: 30,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    aoe: true,     counters: ['archer'] },
     // 核心层 (10~100元) ★ 营收主力
-    royalGuard:  { name: '皇家卫队', damage: 200, hp: 200, speed: 1.5, cost: 99,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000,  counters: ['knight', 'archer'] },
+    royalGuard:  { name: '皇家卫队', damage: 100, hp: 1000, speed: 1.5, cost: 99,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000,  counters: ['knight', 'archer'] },
     fireArrow:   { name: '火矢齐射', damage: 500, hp: 0,   speed: 0,   cost: 199, showAvatar: false, avatarSize: 0,       avatarTime: 0,    globalSkill: true, slow: 0.3, slowTime: 8000, counters: [] },
     batteringRam:{ name: '攻城锤',   damage: 1500,hp: 0,   speed: 0,   cost: 299, showAvatar: true,  avatarSize: 'medium', avatarTime: 8000,  siege: true,   counters: [] },
     // 顶级层 (100~500元) ★ 大哥专区
-    giant:       { name: '岩石巨人', damage: 2500, hp: 500, speed: 0.8, cost: 520,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000, counters: ['militia', 'swordsman', 'knight', 'archer', 'catapult', 'royalGuard'] },
-    dragonKnight:{ name: '龙骑士',   damage: 6000, hp: 1000,speed: 3.0, cost: 1200, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  fear: true, fearTime: 3000, counters: ['giant'] },
+    giant:       { name: '岩石巨人', damage: 500, hp: 2500, speed: 0.8, cost: 520,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000, counters: ['militia', 'swordsman', 'knight', 'archer', 'catapult', 'royalGuard'] },
+    dragonKnight:{ name: '龙骑士',   damage: 1000,hp: 5000,speed: 3.0, cost: 1200, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  fear: true, fearTime: 3000, counters: ['giant'] },
     wrathOfGod:  { name: '天神之怒', damage: 8000, hp: 0,   speed: 0,   cost: 3000, showAvatar: false,avatarSize: 0,       avatarTime: 0,    globalSkill: true, castleDmg: 0.2, counters: [] },
     // 盲盒
     warChest:    { name: '战争宝箱', damage: 0,   hp: 0,   speed: 0,   cost: 99,  showAvatar: false, avatarSize: 0,       avatarTime: 0,    random: true,  counters: [] },
@@ -117,6 +118,21 @@ module.exports = {
     // '5': 'knight',       // 棒棒糖
     // '10': 'archer',      // 鲜花
     // ...
+  },
+
+  // === 兵种动画 ===
+  ANIMATION: {
+    IDLE_FRAMES: 4,               // idle 帧数（呼吸循环）
+    IDLE_FRAME_MS: 150,           // idle 帧间隔 → 总周期 600ms
+    WALK_FRAMES: 6,               // walk 帧数（闭口走步循环）
+    WALK_FRAME_MS: 100,           // walk 帧间隔 → 总周期 600ms
+    WALK_BOB_AMPLITUDE: 3,        // 行走程序化弹跳幅度 (px)
+    ATTACK_FRAMES: 4,             // attack 帧数（蓄力→挥砍→命中→收招）
+    ATTACK_FRAME_MS: 120,         // attack 帧间隔 → 总时长 480ms
+    DEATH_FRAMES: 4,              // death 帧数（受击→踉跄→倒地→消失）
+    DEATH_FRAME_MS: 180,          // death 帧间隔 → 总时长 720ms
+    DEATH_DURATION: 720,          // 死亡动画总时长 (ms)，播完后从数组移除
+    ATTACK_RANGE_FACTOR: 1.3,     // 攻击动画触发范围 = COLLISION_RANGE × 此值
   },
 
   // === 日志（开发调试） ===
