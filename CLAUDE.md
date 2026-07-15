@@ -52,6 +52,8 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 - 所有动画用 `requestAnimationFrame`，不用 `setInterval`
 - 兵种精灵图预加载，不边渲染边加载
 - 弹幕滚动层和战斗层分两个 Canvas 叠加，避免重绘互相影响
+- **UI 位置全部从 `window.UI_POS` 读取**，不在渲染函数中硬编码坐标。新增 UI 元素时同步在 POS 中声明位置字段
+- **改 POS 值后必须 grep 确认所有相关 draw 函数都读了 POS**（常见错误：改了 POS 但渲染函数仍用旧硬编码值）
 
 ### 游戏逻辑
 - 数值全部放 `server/config.js`，不在业务代码里写死
