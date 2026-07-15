@@ -6,8 +6,9 @@
 ## 命令
 
 ```bash
-npm run server          # 启动游戏服务器 (WebSocket :8765)
-npm run frontend        # 启动前端 (OBS 浏览器源 http://localhost:3000)
+.\start.ps1             # 一键启动全部（游戏服务器 + 前端 + 弹幕中继）→ http://localhost:3000
+npm run server          # 单独启动游戏服务器 (WebSocket :8765)
+npm run frontend        # 单独启动前端 (OBS 浏览器源 http://localhost:3000)
 npm run restart         # 杀旧服务器 + 重启（解决端口占用）
 npm run check           # JS 语法检查
 npm run test:anim       # 一键动画测试（启动 server + 自动出兵）
@@ -78,6 +79,7 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 | `server/ranking.js` | 积分/段位/排行榜。纯内存，改数据结构要兼容旧积分 |
 | `frontend/renderer.js` | Canvas 渲染主循环。帧率目标 30fps（直播 30fps 足够，省 CPU） |
 | `frontend/sprites.js` | 兵种精灵绘制。几何图形时期（Phase 1）vs 精灵图时期（Phase 3）实现不同 |
+| `frontend/audio.js` | 音效引擎。文件播放模式：往 `frontend/assets/audio/` 丢 MP3 即可。IIFE 包裹 |
 
 ## 工作方式
 

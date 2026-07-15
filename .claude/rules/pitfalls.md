@@ -263,6 +263,21 @@ if (gen !== genRef.current) return; // 过期丢弃
 
 ---
 
+### G9. 双服务器架构不能随意合并
+
+**症状**：改了 package.json 或端口配置后，前端画面丢失、资源 404、用户骂人。
+
+**根因**：项目有两套服务器——游戏服务器（8765，Node.js，serve frontend/ + assets/）和前端开发服务器（3000，http-server，仅 serve frontend/）。start.ps1 启前者，npm run frontend 启后者。两者 serve 路径不同（8765 的 `/assets/` → `assets/`，3000 的 `/assets/` → `frontend/assets/`）。用户习惯用哪个就哪个，绝不改用户工作流。
+
+**哪类 agent 会踩**：任何改 package.json、端口配置、start.ps1 的
+
+**修复/预防**：
+1. 绝不在不通知用户的情况下改 npm scripts 或启动脚本
+2. 新增资源文件（如音频）需确认在两个服务器路径下都能访问，或统一放 `frontend/` 下
+3. start.ps1 是用户唯一入口，改动前必须确认
+
+---
+
 ### G8. `const` 声明在普通 `<script>` 之间冲突
 
 **症状**：页面全黑/白屏，Console 报 `Uncaught SyntaxError: Identifier 'X' has already been declared`。
