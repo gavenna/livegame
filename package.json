@@ -7,7 +7,9 @@
     "server": "node server/index.js",
     "frontend": "npx http-server frontend -p 3000 -c-1",
     "check": "node --check server/*.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "restart": "node -e \"require('child_process').execSync('for pid in $(netstat -ano | grep :8765 | awk \\\"{print \\$5}\\\" | sort -u); do taskkill //F //PID $pid 2>/dev/null; done', {stdio:'inherit'}); require('child_process').spawn('node', ['server/index.js'], {stdio:'inherit'})\"",
+    "test:anim": "node server/quicktest-anim.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

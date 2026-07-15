@@ -67,6 +67,8 @@ API Key 在 `server/secrets.json`：
 API 端点: `https://litechipcloud.cn/v1/images/generations`
 模型: 文生图 `agnes-image-2.1-flash`，图生图 `agnes-image-2.0-flash`
 
+> ⚠️ **2026-07-15 调研结论**：两个模型均**无法保持角色一致性**。图生图 `2.0-flash` 把输入图当风格参考而非像素锚点，输出角色外观/颜色/比例全变。两个模型均输出 RGB（无 Alpha），需 rembg 后处理，且忽略 `size` 参数始终返回 1024²。**动画帧生成路线已放弃**，当前采用纯程序化动画（`frontend/sprites.js`）。`gen-anim-frames.js` 和 `stitch-sprites.py` 保留供将来参考，不用于生产。
+
 ## 质量铁律
 
 1. **Art Bible 说了算** — 好看但不符合规范 = 不合格

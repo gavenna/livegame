@@ -6,15 +6,21 @@
 ## 命令
 
 ```bash
-node server/index.js                    # 启动游戏服务器 (WebSocket :8765)
-npx http-server frontend -p 3000 -c-1  # 启动前端 (OBS 浏览器源 http://localhost:3000)
-node --check server/*.js               # JS 语法检查
-node server/quicktest-anim.js           # 一键动画测试（启动 server + 自动出兵）
+npm run server          # 启动游戏服务器 (WebSocket :8765)
+npm run frontend        # 启动前端 (OBS 浏览器源 http://localhost:3000)
+npm run restart         # 杀旧服务器 + 重启（解决端口占用）
+npm run check           # JS 语法检查
+npm run test:anim       # 一键动画测试（启动 server + 自动出兵）
+npm run dev             # 同 server
+```
+
+底层命令：
+```bash
 python server/stitch-sprites.py         # 拼接精灵图水平条（依赖 Pillow）
 node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（实验，未采用）
 ```
 
-开发时开一个终端跑 `node server/quicktest-anim.js`，浏览器打开 `http://localhost:3000` 看到游戏画面。
+开发时浏览器打开 `http://localhost:3000`，用右侧控制面板或 `npm run test:anim` 测试。
 
 > `gen-anim-frames.js` 和 `stitch-sprites.py` 是 AI 图生图路线的实验产物。经调研 `agnes-image-2.0-flash` 无法保持角色一致性，当前采用纯程序化动画（`sprites.js`），这两个脚本仅供将来参考。
 
