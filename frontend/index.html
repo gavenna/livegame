@@ -160,6 +160,19 @@
       <button class="btn-util" onclick="admin('reset')" style="border-color:rgba(255,255,255,0.1);color:#888">↻ 重置</button>
     </div>
 
+    <h3>🔊 音效</h3>
+    <div class="row">
+      <button class="btn-util" id="btn-mute" onclick="toggleMute()" style="border-color:rgba(255,200,50,0.3);color:#fc5">🔊 音效 ON</button>
+    </div>
+    <div class="row" style="flex-direction:column;gap:3px;margin-top:2px">
+      <label style="color:#888;font-size:10px;display:flex;justify-content:space-between">主音量 <span id="vol-master-label">70%</span></label>
+      <input type="range" min="0" max="100" value="70" oninput="setMasterVol(this.value/100)" style="width:100%;accent-color:#fc5">
+      <label style="color:#888;font-size:10px;display:flex;justify-content:space-between">BGM <span id="vol-bgm-label">50%</span></label>
+      <input type="range" min="0" max="100" value="50" oninput="setBGMVol(this.value/100)" style="width:100%;accent-color:#fc5">
+      <label style="color:#888;font-size:10px;display:flex;justify-content:space-between">SFX <span id="vol-sfx-label">80%</span></label>
+      <input type="range" min="0" max="100" value="80" oninput="setSFXVol(this.value/100)" style="width:100%;accent-color:#fc5">
+    </div>
+
     <h3>调试 & 微调</h3>
     <div class="row">
       <button class="btn-util" id="btn-debug" onclick="toggleDebug()" style="border-color:rgba(100,255,100,0.3);color:#5f5">🔍 调试网格</button>
@@ -227,6 +240,7 @@
   </div>
 </div>
 
+<script src="audio.js"></script>
 <script src="wsClient.js"></script>
 <script src="sprites.js"></script>
 <script src="ui.js"></script>
@@ -400,6 +414,52 @@
   }
 
   console.log('[Panel] Ready. playerId:', PLAYER_ID);
+
+  // === 音效控制 ===
+  function toggleMute() {
+    if (!window.audioEngine) return;
+    window.audioEngine.toggleMute();
+    var btn = document.getElementById('btn-mute');
+    if (window.audioEngine.isMuted()) {
+      btn.textContent = '🔇 静音';
+      btn.style.color = '#f66';
+    } else {
+      btn.textContent = '🔊 音效 ON';
+      btn.style.color = '#fc5';
+    }
+  }
+  function setMasterVol(v) {
+    if (window.audioEngine) window.audioEngine.setMasterVolume(v);
+    var label = document.getElementById('vol-master-label');
+    if (label) label.textContent = Math.round(v * 100) + '%';
+    // 调音量时更新静音按钮
+    var btn = document.getElementById('btn-mute');
+    if (btn && !window.audioEngine.isMuted()) {
+      btn.textContent = '🔊 音效 ON';
+      btn.style.color = '#fc5';
+    }
+  }
+  function setBGMVol(v) {
+    if (window.audioEngine) window.audioEngine.setBGMVolume(v);
+    var label = document.getElementById('vol-bgm-label');
+    if (label) label.textContent = Math.round(v * 100) + '%';
+  }
+  function setSFXVol(v) {
+    if (window.audioEngine) window.audioEngine.setSFXVolume(v);
+    var label = document.getElementById('vol-sfx-label');
+    if (label) label.textContent = Math.round(v * 100) + '%';
+  }
+
+  // === Chrome 自动播放恢复 ===
+  document.addEventListener('click', function initAudio() {
+    if (window.audioEngine && window.audioEngine.resume) {
+      window.audioEngine.resume().then(function() {
+        console.log('[Audio] Context resumed by user click');
+      }).catch(function(e) {
+        console.warn('[Audio] Resume failed:', e.message);
+      });
+    }
+  }, { once: true });
 </script>
 </body>
 </html>

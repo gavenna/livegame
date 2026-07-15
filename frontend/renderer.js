@@ -99,6 +99,25 @@ function gameLoop(timestamp) {
   // 处理事件 → 分发到各特效系统
   processEvents(state);
 
+  // BGM 状态跟踪 + 胜利/战败音效
+  if (window.audioEngine) {
+    var currentState = state.state || 'WAITING';
+    if (currentState !== lastAudioState) {
+      window.audioEngine.setBGMState(currentState);
+      // 进入结算时播放胜利/战败
+      if (currentState === 'ROUND_END') {
+        var redHP = state.red ? state.red.castleHP : 0;
+        var blueHP = state.blue ? state.blue.castleHP : 0;
+        if (redHP > blueHP) {
+          window.audioEngine.playVictory();
+        } else if (blueHP > redHP) {
+          window.audioEngine.playDefeat();
+        }
+      }
+      lastAudioState = currentState;
+    }
+  }
+
   // 更新特效
   updateEffects();
 
@@ -111,7 +130,10 @@ function gameLoop(timestamp) {
 }
 
 /** 事件去重：跟踪已处理的 events 数组 */
-let lastEventHash = '';
+var lastEventHash = '';
+
+/** BGM 状态跟踪 */
+var lastAudioState = '';
 
 // === 事件处理 ===
 
@@ -135,6 +157,7 @@ function processEvents(state) {
       case 'spawn_preview':
         dmText = `⚡ ${evt.text}`;
         eventBanners.push({ text: evt.text, time: now, color: '#FFD700' });
+        if (window.audioEngine) window.audioEngine.playSpawn();
         break;
       case 'spawn':
         if (evt.showAvatar) {
@@ -148,6 +171,7 @@ function processEvents(state) {
             spawnAnims.push({ troopId: troop.id, time: now, x: troop.x, y: troop.y });
           }
         }
+        if (window.audioEngine) window.audioEngine.playSpawn();
         break;
       case 'kill':
         dmText = `💀 ${evt.killerName} 击杀敌方 ${evt.key}`;
@@ -171,26 +195,34 @@ function processEvents(state) {
         }
         // B1: 伤害数字
         damageNumbers.push({ x: killFlashes[killFlashes.length - 1].x, y: killFlashes[killFlashes.length - 1].y - 20, value: '💀', color: '#FF4444', time: now });
+        if (window.audioEngine) window.audioEngine.playKill();
         break;
       case 'global_skill':
         dmText = `🔥 ${evt.ownerName} 释放了 ${evt.key === 'wrathOfGod' ? '天神之怒' : '火矢齐射'}！`;
         eventBanners.push({ text: dmText, time: now, color: evt.key === 'wrathOfGod' ? '#FFD700' : '#FF6347' });
         // B5: 技能特效
         skillEffects.push({ type: evt.key, time: now });
+        if (window.audioEngine) {
+          if (evt.key === 'wrathOfGod') window.audioEngine.playWrathOfGod();
+          else if (evt.key === 'fireArrow') window.audioEngine.playFireArrow();
+        }
         break;
       case 'siege':
         dmText = `🔨 ${evt.ownerName} 派出攻城锤！`;
         eventBanners.push({ text: `🔨 ${evt.ownerName} 的攻城锤撞击城堡！`, time: now, color: '#FF8C00' });
         // B6: 攻城冲击（目标是对立方的城堡）
         siegeImpacts.push({ target: evt.team === 'red' ? 'blue' : 'red', time: now });
+        if (window.audioEngine) window.audioEngine.playSiege();
         break;
       case 'speed_boost':
         dmText = `💨 ${evt.playerName} 吹响了冲锋号！`;
         eventBanners.push({ text: dmText, time: now, color: '#88CCFF' });
+        if (window.audioEngine) window.audioEngine.playSpeedBoost();
         break;
       case 'expire':
         // B4: 死亡动画
         deathAnims.push({ x: W / 2 + (Math.random() - 0.5) * 400, y: H * 0.5 + Math.random() * 200, key: evt.key, time: now });
+        if (window.audioEngine) window.audioEngine.playDeath();
         break;
     }
     if (dmText) {

@@ -47,5 +47,11 @@ assets/sprites/*.psd
 assets/sprites/*.ai
 frontend/assets/sprites/
 
+# Audio (user-managed, large binary files)
+*.mp3
+*.wav
+*.ogg
+!frontend/assets/audio/.gitkeep
+
 # Secrets (API keys)
 server/secrets.json

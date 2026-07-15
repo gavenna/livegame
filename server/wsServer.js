@@ -26,6 +26,9 @@ const MIME_TYPES = {
   '.svg':  'image/svg+xml',
   '.json': 'application/json',
   '.ico':  'image/x-icon',
+  '.mp3':  'audio/mpeg',
+  '.wav':  'audio/wav',
+  '.ogg':  'audio/ogg',
 };
 
 function serveStatic(req, res) {
