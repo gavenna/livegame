@@ -39,11 +39,22 @@ module.exports = {
     // 战斗参数
     COUNTER_MULTIPLIER: 2.0,        // 克制伤害倍率
     PUSH_FACTOR: 0.02,             // 战线推进系数（每点伤害差推进的战线单位）
-    COLLISION_RANGE: 60,           // 交战距离 (px)
+    COLLISION_RANGE: 60,           // 近战交战距离 (px)
+    RANGED_ATTACK_RANGE: 230,     // 远程攻击距离 (px)
     SPEED_FACTOR: 3,              // 速度→像素转换 (px/tick per speed unit)
-    CASTLE_DMG_PER_TICK: 50,      // 战线到城堡时每 tick 伤害
+    CASTLE_DMG_PER_TICK: 50,      // 战线到城堡时每 tick 伤害（单线模式）
+    CASTLE_DMG_PER_TICK_LANE: 17, // 三线模式每线每 tick 伤害（3×17≈51≈50）
     FRONTLINE_MAX: 1000,          // 战线最大值（到达城堡）
     MAX_TROOP_AGE: 60 * 1000,     // 兵种最大存活时间 60秒
+  },
+
+  // === 三线战场 ===
+  LANES: {
+    COUNT: 3,
+    Y: [390, 575, 760],           // 北境/王道/河谷 的 Y 中心坐标
+    NAMES: ['北境', '王道', '河谷'],
+    RED_GATE_X: 285,
+    BLUE_GATE_X: 1635,
   },
 
   // === 兵种定义 ===
@@ -51,21 +62,21 @@ module.exports = {
   // HP 上调 5x，伤害下调 2x（高费兵），确保战斗时长足够展示动画
   TROOPS: {
     // 免费层
-    militia:  { name: '民兵',   damage: 1,   hp: 50,  speed: 1.0, cost: 0,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
+    militia:  { name: '民兵',   damage: 1,   hp: 50,  speed: 1.0, cost: 0,     attackRange: 55,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
     // 入门层 (~1元)
-    swordsman:{ name: '剑士',   damage: 3,   hp: 150, speed: 1.2, cost: 1,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
-    knight:   { name: '骑士',   damage: 12,  hp: 400, speed: 2.0, cost: 5,     showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
+    swordsman:{ name: '剑士',   damage: 3,   hp: 150, speed: 1.2, cost: 1,     attackRange: 64,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
+    knight:   { name: '骑士',   damage: 12,  hp: 400, speed: 2.0, cost: 5,     attackRange: 58,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
     // 进阶层 (1~10元)
-    archer:   { name: '弓手',   damage: 20,  hp: 125, speed: 1.0, cost: 10,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['knight'] },
-    catapult: { name: '投石车', damage: 60,  hp: 250, speed: 0.5, cost: 30,    showAvatar: false, avatarSize: 0,    avatarTime: 0,    aoe: true,     counters: ['archer'] },
+    archer:   { name: '弓手',   damage: 20,  hp: 125, speed: 1.0, cost: 10,    attackRange: 230, showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['knight'] },
+    catapult: { name: '投石车', damage: 60,  hp: 250, speed: 0.5, cost: 30,    attackRange: 280, showAvatar: false, avatarSize: 0,    avatarTime: 0,    aoe: true,     counters: ['archer'] },
     // 核心层 (10~100元) ★ 营收主力
-    royalGuard:  { name: '皇家卫队', damage: 100, hp: 1000, speed: 1.5, cost: 99,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000,  counters: ['knight', 'archer'] },
-    fireArrow:   { name: '火矢齐射', damage: 500, hp: 0,   speed: 0,   cost: 199, showAvatar: false, avatarSize: 0,       avatarTime: 0,    globalSkill: true, slow: 0.3, slowTime: 8000, counters: [] },
-    batteringRam:{ name: '攻城锤',   damage: 1500,hp: 0,   speed: 0,   cost: 299, showAvatar: true,  avatarSize: 'medium', avatarTime: 8000,  siege: true,   counters: [] },
+    royalGuard:  { name: '皇家卫队', damage: 100, hp: 1000, speed: 1.5, cost: 99,  attackRange: 70,  showAvatar: true,  avatarSize: 'small',  avatarTime: 5000,  counters: ['knight', 'archer'] },
+    fireArrow:   { name: '火矢齐射', damage: 500, hp: 0,   speed: 0,   cost: 199, attackRange: 0,   showAvatar: false, avatarSize: 0,       avatarTime: 0,    globalSkill: true, slow: 0.3, slowTime: 8000, counters: [] },
+    batteringRam:{ name: '攻城锤',   damage: 1500,hp: 0,   speed: 0,   cost: 299, attackRange: 0,   showAvatar: true,  avatarSize: 'medium', avatarTime: 8000,  siege: true,   counters: [] },
     // 顶级层 (100~500元) ★ 大哥专区
-    giant:       { name: '岩石巨人', damage: 500, hp: 2500, speed: 0.8, cost: 520,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000, counters: ['militia', 'swordsman', 'knight', 'archer', 'catapult', 'royalGuard'] },
-    dragonKnight:{ name: '龙骑士',   damage: 1000,hp: 5000,speed: 3.0, cost: 1200, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  fear: true, fearTime: 3000, counters: ['giant'] },
-    wrathOfGod:  { name: '天神之怒', damage: 8000, hp: 0,   speed: 0,   cost: 3000, showAvatar: false,avatarSize: 0,       avatarTime: 0,    globalSkill: true, castleDmg: 0.2, counters: [] },
+    giant:       { name: '岩石巨人', damage: 500, hp: 2500, speed: 0.8, cost: 520,  attackRange: 85,  showAvatar: true, avatarSize: 'large',  avatarTime: 12000, counters: ['militia', 'swordsman', 'knight', 'archer', 'catapult', 'royalGuard'] },
+    dragonKnight:{ name: '龙骑士',   damage: 1000,hp: 5000,speed: 3.0, cost: 1200, attackRange: 180, showAvatar: true, avatarSize: 'huge',   avatarTime: 3000,  dragonBreath: true, breathBurn: 30, breathTime: 3000, roarInterval: 5000, counters: ['giant'] },
+    wrathOfGod:  { name: '天神之怒', damage: 8000, hp: 0,   speed: 0,   cost: 3000, attackRange: 0,   showAvatar: false,avatarSize: 0,       avatarTime: 0,    globalSkill: true, castleDmg: 0.2, counters: [] },
     // 盲盒
     warChest:    { name: '战争宝箱', damage: 0,   hp: 0,   speed: 0,   cost: 99,  showAvatar: false, avatarSize: 0,       avatarTime: 0,    random: true,  counters: [] },
   },

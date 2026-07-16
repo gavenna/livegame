@@ -14,18 +14,23 @@ const CANVAS_H = config.CANVAS_HEIGHT;       // 1080
 const CENTER_X = CANVAS_W / 2;               // 960 — 中线
 const RED_SPAWN_X = 100;                      // 红方出生点
 const BLUE_SPAWN_X = CANVAS_W - 100;         // 蓝方出生点 (1820)
-const GROUND_Y = CANVAS_H * 0.55;            // 地面线 y 坐标
+const GROUND_Y = CANVAS_H * 0.55;            // 地面线 y 坐标（单线模式，三线模式用 LANES.Y）
+
+const LANE_COUNT = config.LANES.COUNT;
+const LANE_Y = config.LANES.Y;              // [390, 575, 760]
 
 class Battle {
   constructor() {
     /** @type {Array<{id: number, team: string, key: string, damage: number, hp: number, maxHp: number, speed: number, x: number, y: number, ownerId: string, createdAt: number, counters: string[], ranged: boolean, aoe: boolean, fear: boolean, siege: boolean, globalSkill: boolean, showAvatar: boolean, avatarSize: string, avatarTime: number}>} */
     this.troops = [];
-    this.frontLine = 0;              // -1000 ~ +1000, 0=中线
+    this.frontLines = [0, 0, 0];      // 三线各自战线 [-1000, +1000], 0=中线
+    this.frontLine = 0;              // 向后兼容：三线均值
+    this._laneRoundRobin = 0;         // 兵种 round-robin 分线计数器
     this.events = [];                // 本 tick 战斗事件
   }
 
   /** 生成兵种 */
-  spawnTroop(team, troopKey, playerId, playerName) {
+  spawnTroop(team, troopKey, playerId, playerName, lane = null) {
     assert.validTeam(team);
 
     const troopDef = config.TROOPS[troopKey];
@@ -41,12 +46,19 @@ class Battle {
       logger.info('BATTLE', `${playerName || playerId} 开盲盒 → ${actualDef.name}`);
     }
 
+    // 三线分线：显式指定 > round-robin
+    const assignedLane = (lane !== null && lane >= 0 && lane < LANE_COUNT)
+      ? lane
+      : (this._laneRoundRobin++ % LANE_COUNT);
+    const laneY = LANE_Y[assignedLane];
+
     const x = team === 'red' ? RED_SPAWN_X : BLUE_SPAWN_X;
-    const y = GROUND_Y + (Math.random() - 0.5) * 200;
+    const y = laneY + (Math.random() - 0.5) * 20;  // ±10px 微抖
 
     const troop = {
       id: Date.now() + Math.random(),
       team,
+      lane: assignedLane,         // 0/1/2 所属兵线
       key: actualKey,
       damage: actualDef.damage,
       hp: actualDef.hp,
@@ -59,10 +71,16 @@ class Battle {
       createdAt: Date.now(),
       counters: actualDef.counters || [],
       ranged: actualDef.ranged || false,
+      attackRange: actualDef.attackRange || config.BALANCE.COLLISION_RANGE,
       aoe: actualDef.aoe || false,
       fear: actualDef.fear || false,
       siege: actualDef.siege || false,
       globalSkill: actualDef.globalSkill || false,
+      dragonBreath: actualDef.dragonBreath || false,
+      breathBurn: actualDef.breathBurn || 0,
+      breathTime: actualDef.breathTime || 0,
+      roarInterval: actualDef.roarInterval || 0,
+      _lastRoarTime: 0,
       showAvatar: actualDef.showAvatar || false,
       avatarSize: actualDef.avatarSize || 0,
       avatarTime: actualDef.avatarTime || 0,
@@ -153,7 +171,6 @@ class Battle {
     }
 
     // === 2. 兵种移动 + 动画状态 ===
-    const HALT_RANGE = bal.COLLISION_RANGE;       // 接敌停止距离 = 交战距离
 
     // 先收集所有存活兵种位置，用于判定是否应停止
     const allAlive = this.troops.filter(t => t.animState !== 'death' && t.hp > 0);
@@ -162,11 +179,11 @@ class Battle {
       if (t.animState === 'death') continue;
       if (t.speed <= 0) continue;
 
-      // 检查前方是否有敌人，有就停下战斗
-      const enemies = allAlive.filter(e => e.team !== t.team);
+      // 检查前方是否有同线敌人（远程用远程距离，近战用近战距离）
+      const enemies = allAlive.filter(e => e.team !== t.team && e.lane === t.lane);
       let hasEnemyNearby = false;
       for (const enemy of enemies) {
-        if (Math.abs(t.x - enemy.x) < HALT_RANGE) {
+        if (Math.abs(t.x - enemy.x) < t.attackRange) {
           hasEnemyNearby = true;
           break;
         }
@@ -193,14 +210,14 @@ class Battle {
     const aliveTroops = this.troops.filter(t => t.animState !== 'death');
     const redTroops = aliveTroops.filter(t => t.team === 'red' && t.hp > 0);
     const blueTroops = aliveTroops.filter(t => t.team === 'blue' && t.hp > 0);
-    const attackRange = bal.COLLISION_RANGE * anim.ATTACK_RANGE_FACTOR;
+    const attackRangeFactor = anim.ATTACK_RANGE_FACTOR;
 
     for (const t of aliveTroops) {
       if (t.hp <= 0) continue;
-      const enemies = t.team === 'red' ? blueTroops : redTroops;
+      const enemies = (t.team === 'red' ? blueTroops : redTroops).filter(e => e.lane === t.lane);
       for (const enemy of enemies) {
         if (enemy.hp <= 0) continue;
-        if (Math.abs(t.x - enemy.x) < attackRange) {
+        if (Math.abs(t.x - enemy.x) < t.attackRange * attackRangeFactor) {
           t.animState = 'attack';
           enemy.animState = 'attack'; // 双方都显示攻击动画
           break;
@@ -217,11 +234,12 @@ class Battle {
       let closest = null, closestDist = Infinity;
       for (const bt of blueTroops) {
         if (bt.hp <= 0) continue;
+        if (bt.lane !== rt.lane) continue;  // 同线交战
         const dist = Math.abs(rt.x - bt.x);
         if (dist < closestDist) { closest = bt; closestDist = dist; }
       }
 
-      if (closest && closestDist < bal.COLLISION_RANGE) {
+      if (closest && closestDist < rt.attackRange) {
         const redDmg = getCounterDamage(rt, closest, bal.COUNTER_MULTIPLIER);
         const blueDmg = getCounterDamage(closest, rt, bal.COUNTER_MULTIPLIER);
 
@@ -241,7 +259,7 @@ class Battle {
         if (rt.aoe) {
           for (const bt of blueTroops) {
             if (bt.hp <= 0) continue;
-            if (Math.abs(rt.x - bt.x) < bal.COLLISION_RANGE * 2) {
+            if (Math.abs(rt.x - bt.x) < rt.attackRange * 2 && bt.lane === rt.lane) {
               const splashDmg = rt.damage * 0.3;
               bt.hp -= splashDmg;
               if (bt.hp <= 0) {
@@ -259,7 +277,7 @@ class Battle {
         if (bt.aoe) {
           for (const rt of redTroops) {
             if (rt.hp <= 0) continue;
-            if (Math.abs(bt.x - rt.x) < bal.COLLISION_RANGE * 2) {
+            if (Math.abs(bt.x - rt.x) < bt.attackRange * 2 && rt.lane === bt.lane) {
               rt.hp -= bt.damage * 0.3;
               if (rt.hp <= 0) {
                 this.events.push({ type: 'kill', troopId: rt.id, team: 'red', key: rt.key, killerId: bt.ownerId, killerName: bt.ownerName, time: now });
@@ -270,35 +288,79 @@ class Battle {
       }
     }
 
-    // === 5. 恐惧效果（龙骑士，持续 debuff） ===
+    // === 5. 龙骑士：龙焰吐息 + 恐惧咆哮 ===
     for (const t of this.troops) {
-      if (t.animState === 'death') continue;
-      if (t.fear && t.hp > 0) {
-        const enemies = t.team === 'red' ? blueTroops : redTroops;
+      if (t.animState === 'death' || t.hp <= 0) continue;
+      if (!t.dragonBreath) continue;
+
+      const enemies = (t.team === 'red' ? blueTroops : redTroops)
+        .filter(e => e.hp > 0 && e.lane === t.lane);
+      const facingDir = t.team === 'red' ? 1 : -1;
+
+      // 5a. 龙焰吐息 — AOE 攻击同线敌人（1s 冷却）
+      if (t.animState === 'attack' && (!t._lastBreathTime || now - t._lastBreathTime > 1000)) {
+        t._lastBreathTime = now;
+        let hitCount = 0;
         for (const enemy of enemies) {
-          if (enemy.hp <= 0) continue;
           const dist = Math.abs(t.x - enemy.x);
-          if (dist < bal.COLLISION_RANGE * 3) {
-            // 施加恐惧 debuff（3s）
-            if (!enemy._fearedUntil || enemy._fearedUntil < now) {
-              enemy._origSpeed = enemy.speed;
-              enemy._fearedUntil = now + 3000;
-              enemy.speed = enemy.speed * 0.5;
+          const dir = Math.sign(enemy.x - t.x);
+          // 只打前方扇形区域（同方向 + 范围内）
+          if (dist < t.attackRange && dir === facingDir) {
+            enemy.hp -= t.damage;
+            hitCount++;
+            // 施加灼烧 debuff
+            enemy._burnUntil = now + t.breathTime;
+            enemy._burnDmg = t.breathBurn;
+            if (enemy.hp <= 0) {
+              this.events.push({ type: 'kill', troopId: enemy.id, team: enemy.team, key: enemy.key, killerId: t.ownerId, killerName: t.ownerName, time: now });
             }
-            // 击退
-            if (enemy.team === 'red') enemy.x = Math.max(50, enemy.x - 15);
-            else enemy.x = Math.min(CANVAS_W - 50, enemy.x + 15);
           }
+        }
+        if (hitCount > 0) {
+          this.events.push({ type: 'dragon_breath', team: t.team, lane: t.lane, x: t.x, ownerName: t.ownerName, hitCount, time: now });
+        }
+      }
+
+      // 5b. 恐惧咆哮 — 周期性 shockwave
+      if (now - t._lastRoarTime > t.roarInterval) {
+        t._lastRoarTime = now;
+        let feared = 0;
+        for (const enemy of enemies) {
+          const dist = Math.abs(t.x - enemy.x);
+          if (dist < t.attackRange * 2) {
+            enemy._fearedUntil = now + 3000;
+            enemy._origSpeed = enemy.speed;
+            enemy.speed = enemy.speed * 0.5;
+            feared++;
+          }
+        }
+        if (feared > 0) {
+          this.events.push({ type: 'dragon_roar', team: t.team, lane: t.lane, x: t.x, ownerName: t.ownerName, fearedCount: feared, time: now });
         }
       }
     }
-    // 清理过期恐惧 debuff
+
+    // 灼烧伤害 tick
+    for (const t of this.troops) {
+      if (t.animState === 'death' || t.hp <= 0) continue;
+      if (t._burnUntil && t._burnUntil > now && t._burnDmg > 0) {
+        t.hp -= t._burnDmg;
+        if (t.hp <= 0) {
+          this.events.push({ type: 'kill', troopId: t.id, team: t.team, key: t.key, killerId: 'dragonFire', killerName: '龙焰', time: now });
+        }
+      }
+    }
+    // 清理过期 debuff（恐惧 + 灼烧）
     for (const t of this.troops) {
       if (t.animState === 'death') continue;
       if (t._fearedUntil && t._fearedUntil < now && t._origSpeed !== undefined) {
         t.speed = t._origSpeed;
         t._fearedUntil = null;
         t._origSpeed = undefined;
+      }
+      if (t._burnUntil && t._burnUntil < now) {
+        t._burnUntil = null;
+        t._burnDmg = 0;
       }
     }
 
@@ -313,44 +375,70 @@ class Battle {
       }
     }
 
-    // === 6. 更新战线 ===
-    const dmgDiff = redTotalDmg - blueTotalDmg;
-    const totalDmg = redTotalDmg + blueTotalDmg;
-    const pushAmount = totalDmg > 0
-      ? (dmgDiff / totalDmg) * bal.PUSH_FACTOR * 1000
-      : 0;
-    this.frontLine = Math.max(-bal.FRONTLINE_MAX, Math.min(bal.FRONTLINE_MAX, this.frontLine + pushAmount));
+    // === 6. 更新战线（三线独立计算） ===
+    const laneDmg = [{ red: 0, blue: 0 }, { red: 0, blue: 0 }, { red: 0, blue: 0 }];
+    for (const t of redTroops) {
+      if (t.hp > 0) laneDmg[t.lane].red += t.damage;
+    }
+    for (const t of blueTroops) {
+      if (t.hp > 0) laneDmg[t.lane].blue += t.damage;
+    }
+
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const { red, blue } = laneDmg[i];
+      const dmgDiff = red - blue;
+      const totalDmg = red + blue;
+      const pushAmount = totalDmg > 0
+        ? (dmgDiff / totalDmg) * bal.PUSH_FACTOR * 1000
+        : 0;
+      this.frontLines[i] = Math.max(-bal.FRONTLINE_MAX, Math.min(bal.FRONTLINE_MAX, this.frontLines[i] + pushAmount));
+    }
+
+    // 全局均值（向后兼容）
+    this.frontLine = this.frontLines.reduce((a, b) => a + b, 0) / LANE_COUNT;
 
     // 仅在战线变化显著时记日志
-    if (Math.abs(this.frontLine) > 500 && Math.abs(pushAmount) > 5) {
-      logger.debug('BATTLE', `战线: ${Math.round(this.frontLine)} (push=${pushAmount.toFixed(2)}) 红dmg:${redTotalDmg} 蓝dmg:${blueTotalDmg} 兵:${this.troops.length} 死:${deadCount}`);
+    const maxFL = Math.max(...this.frontLines.map(Math.abs));
+    const avgPush = this.frontLines.map((fl, i) => {
+      const { red, blue } = laneDmg[i];
+      return red + blue > 0 ? (red - blue) / (red + blue) * bal.PUSH_FACTOR * 1000 : 0;
+    }).reduce((a, b) => a + Math.abs(b), 0) / LANE_COUNT;
+    if (maxFL > 500 && avgPush > 5) {
+      logger.debug('BATTLE', `战线: [${this.frontLines.map(f => Math.round(f)).join(',')}] 红dmg:${redTotalDmg} 蓝dmg:${blueTotalDmg} 兵:${this.troops.length} 死:${deadCount}`);
     }
 
     const tickEvents = [...this.events];
     this.events = [];
     return {
+      frontLines: this.frontLines,
       frontLine: this.frontLine,
       troops: this.troops,
       events: tickEvents,
     };
   }
 
-  /** 获取战线推进到城堡时的伤害（由 GameEngine 调用） */
+  /** 获取战线推进到城堡时的伤害（三线独立判定，由 GameEngine 调用） */
   getCastleDamage() {
     const bal = config.BALANCE;
-    const absFL = Math.abs(this.frontLine);
-    if (absFL >= bal.FRONTLINE_MAX) {
-      const dmg = bal.CASTLE_DMG_PER_TICK;
-      const rebound = bal.FRONTLINE_MAX * 0.3;
-      const oldFL = this.frontLine;
-      this.frontLine = Math.sign(this.frontLine) * (bal.FRONTLINE_MAX - rebound);
-      logger.info('BATTLE', `战线到城堡! ${this.frontLine > 0 ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLine)})`);
-      return {
-        target: this.frontLine > 0 ? 'blue' : 'red',
-        damage: dmg,
-      };
+    const results = [];
+
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const absFL = Math.abs(this.frontLines[i]);
+      if (absFL >= bal.FRONTLINE_MAX) {
+        const dmg = bal.CASTLE_DMG_PER_TICK_LANE;
+        const rebound = bal.FRONTLINE_MAX * 0.3;
+        const oldFL = this.frontLines[i];
+        this.frontLines[i] = Math.sign(this.frontLines[i]) * (bal.FRONTLINE_MAX - rebound);
+        logger.info('BATTLE', `战线到城堡! 线${i} ${this.frontLines[i] > 0 ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
+        results.push({
+          target: this.frontLines[i] > 0 ? 'blue' : 'red',
+          damage: dmg,
+          lane: i,
+        });
+      }
     }
-    return null;
+
+    return results;  // 空数组或无-多条伤害记录
   }
 
   /** 计算双方当前总伤害输出 */
@@ -364,9 +452,26 @@ class Battle {
     return { red: redDmg, blue: blueDmg };
   }
 
-  /** 获取战线位置 */
+  /** 获取战线位置（向后兼容） */
   getFrontLine() {
     return this.frontLine;
+  }
+
+  /** 获取三线战线 */
+  getFrontLines() {
+    return this.frontLines;
+  }
+
+  /** 计算某线压力值（正=红优，负=蓝优，用于前端渲染） */
+  getLanePressure(laneIndex) {
+    let score = 0;
+    for (const t of this.troops) {
+      if (t.animState === 'death' || t.hp <= 0) continue;
+      if (t.lane !== laneIndex) continue;
+      const value = t.hp / t.maxHp + t.damage / 30;
+      score += t.team === 'red' ? value : -value;
+    }
+    return score;
   }
 }
 

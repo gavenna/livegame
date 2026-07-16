@@ -11,6 +11,12 @@ const FPS = 30;
 const FRAME_MS = 1000 / FPS;
 const W = 1920, H = 1080;
 
+// 三线战场常量（与 server/config.js LANES 同步）
+var LANE_Y = [390, 575, 760];
+var LANE_NAMES = ['北境', '王道', '河谷'];
+var RED_GATE_X = 285;
+var BLUE_GATE_X = 1635;
+
 const battleCanvas = document.getElementById('battle-layer');
 const uiCanvas = document.getElementById('ui-layer');
 const danmakuCanvas = document.getElementById('danmaku-layer');
@@ -44,6 +50,12 @@ const skillEffects = [];
 
 /** B6: 攻城冲击 { target ('red'|'blue'), time } */
 const siegeImpacts = [];
+
+/** B7: 龙焰吐息 { x, y, lane, team, time } */
+const dragonBreaths = [];
+
+/** B8: 龙吼冲击波 { x, y, lane, team, time } */
+const dragonRoars = [];
 
 /** C1: 事件播报 { text, time, color } */
 const eventBanners = [];
@@ -219,6 +231,16 @@ function processEvents(state) {
         eventBanners.push({ text: dmText, time: now, color: '#88CCFF' });
         if (window.audioEngine) window.audioEngine.playSpeedBoost();
         break;
+      case 'dragon_breath':
+        // B7: 龙焰吐息
+        dragonBreaths.push({ x: evt.x, lane: evt.lane, team: evt.team, time: now });
+        eventBanners.push({ text: '🐉 ' + (evt.ownerName || '龙骑士') + ' 喷吐龙焰！×' + (evt.hitCount || 0), time: now, color: '#FF4500' });
+        break;
+      case 'dragon_roar':
+        // B8: 恐惧咆哮
+        dragonRoars.push({ x: evt.x, lane: evt.lane, team: evt.team, time: now });
+        eventBanners.push({ text: '🦁 ' + (evt.ownerName || '龙骑士') + ' 发出恐惧咆哮！', time: now, color: '#FFD700' });
+        break;
       case 'expire':
         // B4: 死亡动画
         deathAnims.push({ x: W / 2 + (Math.random() - 0.5) * 400, y: H * 0.5 + Math.random() * 200, key: evt.key, time: now });
@@ -268,6 +290,16 @@ function updateEffects() {
     if (now - siegeImpacts[i].time > 1000) siegeImpacts.splice(i, 1);
   }
 
+  // B7: 龙焰吐息（0.8s）
+  for (let i = dragonBreaths.length - 1; i >= 0; i--) {
+    if (now - dragonBreaths[i].time > 800) dragonBreaths.splice(i, 1);
+  }
+
+  // B8: 龙吼冲击波（1.2s）
+  for (let i = dragonRoars.length - 1; i >= 0; i--) {
+    if (now - dragonRoars[i].time > 1200) dragonRoars.splice(i, 1);
+  }
+
   // C1: 事件播报（2s）
   for (let i = eventBanners.length - 1; i >= 0; i--) {
     if (now - eventBanners[i].time > 2000) eventBanners.splice(i, 1);
@@ -289,8 +321,9 @@ function renderBattle(ctx, state) {
 
   drawBackground(ctx);
 
-  const frontLine = state.frontLine || 0;
-  drawFrontLine(ctx, frontLine, state);
+  var frontLines = state.frontLines || (state.frontLine != null ? [state.frontLine, state.frontLine, state.frontLine] : [0, 0, 0]);
+  drawFrontLine(ctx, frontLines, state);
+  drawLaneBackgrounds(ctx, state);
 
   drawCastles(ctx, state);
 
@@ -309,6 +342,19 @@ function renderBattle(ctx, state) {
 
       window.drawSprite(ctx, troop, easedScale, now);
       activeIds.push(troop.id);
+
+      // 战斗音效：攻击动画时触发（按兵种类型选音效，per-unit 节流）
+      if (troop.animState === 'attack' && window.audioEngine && window.audioEngine.playUnitAttack) {
+        var ae = window.audioEngine;
+        var atkKey = troop.key || '';
+        // per-unit 节流：每个兵种独立节流间隔
+        ae._atkTimes = ae._atkTimes || {};
+        var interval = troop.ranged ? 500 : 350;  // 远程间隔略长
+        if (!ae._atkTimes[atkKey] || now - ae._atkTimes[atkKey] > interval) {
+          ae.playUnitAttack(atkKey);
+          ae._atkTimes[atkKey] = now;
+        }
+      }
     }
 
     // 清理已移除兵种的动画追踪器
@@ -331,14 +377,23 @@ function renderBattle(ctx, state) {
 
   // 攻城冲击
   drawSiegeImpacts(ctx, state);
+  drawDragonBreaths(ctx);
+  drawDragonRoars(ctx);
 
   // 环境粒子（在兵种下层）
   drawParticles(ctx);
 }
 
 /** B7: 战线可视化 */
-function drawFrontLine(ctx, frontLine, state) {
-  const centerX = W / 2 + frontLine * 0.5;
+function drawFrontLine(ctx, frontLines, state) {
+  if (typeof frontLines === 'number') { frontLines = [frontLines, frontLines, frontLines]; }
+  if (!frontLines) { frontLines = [0, 0, 0]; }
+  var laneY = (window.UI_POS && window.UI_POS.lanes) ? window.UI_POS.lanes.Y : LANE_Y;
+
+  for (var li = 0; li < 3; li++) {
+    var frontLine = frontLines[li] || 0;
+    var lineH = laneY[li];
+  var centerX = W / 2 + frontLine * 0.5;
   const absFL = Math.abs(frontLine);
 
   // 线宽随战线偏移增大
@@ -357,34 +412,93 @@ function drawFrontLine(ctx, frontLine, state) {
   }
 
   ctx.beginPath();
-  ctx.moveTo(centerX, 100);
-  ctx.lineTo(centerX, H - 50);
+  ctx.moveTo(centerX, lineH - 35);
+  ctx.lineTo(centerX, lineH + 35);
   ctx.stroke();
   ctx.setLineDash([]);
 
   // 战线到城堡时闪烁
-  const isPlaying = state.state === 'PLAYING';
-  if (isPlaying && absFL >= 800) {
-    const blink = Math.sin(Date.now() * 0.01) > 0;
-    if (blink) {
+  if (state.state === 'PLAYING' && absFL >= 800) {
+    if (Math.sin(Date.now() * 0.01) > 0) {
       ctx.strokeStyle = frontLine > 0 ? 'rgba(255,50,50,0.8)' : 'rgba(50,50,255,0.8)';
       ctx.lineWidth = lineWidth + 3;
       ctx.beginPath();
-      ctx.moveTo(centerX, 100);
-      ctx.lineTo(centerX, H - 50);
+      ctx.moveTo(centerX, lineH - 35);
+      ctx.lineTo(centerX, lineH + 35);
       ctx.stroke();
     }
   }
+  } // end per-lane loop
 
-  // 战线标签
+  // 全局推进标签（基于三线均值）
+  var avgFL = frontLines.reduce(function(a, b) { return a + b; }, 0) / 3;
   ctx.font = '13px Microsoft YaHei, sans-serif';
   ctx.textAlign = 'center';
-  if (frontLine > 300) {
+  if (avgFL > 300) {
     ctx.fillStyle = 'rgba(255,150,150,0.8)';
-    ctx.fillText('→ 红方推进中', centerX, 90);
-  } else if (frontLine < -300) {
+    ctx.fillText('→ 红方推进中', W / 2, 85);
+  } else if (avgFL < -300) {
     ctx.fillStyle = 'rgba(150,150,255,0.8)';
-    ctx.fillText('← 蓝方推进中', centerX, 90);
+    ctx.fillText('← 蓝方推进中', W / 2, 85);
+  }
+}
+
+/** 三线背景带 + 线名标签 */
+function drawLaneBackgrounds(ctx, state) {
+  var P = window.UI_POS ? window.UI_POS.lanes : null;
+  var laneY = P ? P.Y : LANE_Y;
+  var laneNames = P ? P.names : LANE_NAMES;
+
+  for (var i = 0; i < 3; i++) {
+    var y = laneY[i];
+    var pressure = 0;
+    if (state.lanes && state.lanes[i]) { pressure = state.lanes[i].pressure; }
+
+    // 压力着色
+    if (pressure > 0.8) {
+      ctx.fillStyle = 'rgba(255,85,77,0.06)';
+    } else if (pressure < -0.8) {
+      ctx.fillStyle = 'rgba(60,156,255,0.06)';
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    }
+    ctx.fillRect(0, y - 45, W, 90);
+
+    // 车道分隔线
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y - 45);
+    ctx.lineTo(W, y - 45);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y + 45);
+    ctx.lineTo(W, y + 45);
+    ctx.stroke();
+
+    // 线名标签
+    ctx.font = '15px Microsoft YaHei, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.textAlign = 'center';
+    ctx.fillText(laneNames[i], W / 2, y + 5);
+  }
+
+  // 城门标记
+  var gateRX = P ? P.gateRedX : RED_GATE_X;
+  var gateBX = P ? P.gateBlueX : BLUE_GATE_X;
+  for (var j = 0; j < 3; j++) {
+    var gy = laneY[j];
+    // 红方城门
+    ctx.strokeStyle = 'rgba(255,85,77,0.25)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gateRX - 10, gy - 30, 20, 60);
+    ctx.fillStyle = 'rgba(255,85,77,0.15)';
+    ctx.fillRect(gateRX - 10, gy - 30, 20, 60);
+    // 蓝方城门
+    ctx.strokeStyle = 'rgba(60,156,255,0.25)';
+    ctx.strokeRect(gateBX - 10, gy - 30, 20, 60);
+    ctx.fillStyle = 'rgba(60,156,255,0.15)';
+    ctx.fillRect(gateBX - 10, gy - 30, 20, 60);
   }
 }
 
@@ -663,6 +777,83 @@ function drawSiegeImpacts(ctx, state) {
 }
 
 // === E1: 环境粒子 ===
+
+/** 龙焰吐息 — 锥形火焰粒子 */
+function drawDragonBreaths(ctx) {
+  var P = window.UI_POS ? window.UI_POS.lanes : null;
+  var laneY = P ? P.Y : LANE_Y;
+  var now = Date.now();
+
+  for (var i = 0; i < dragonBreaths.length; i++) {
+    var db = dragonBreaths[i];
+    var age = now - db.time;
+    var progress = age / 800;
+    var y = laneY[db.lane];
+    var isRed = db.team === 'red';
+    var dir = isRed ? 1 : -1;
+
+    // 锥形火焰粒子群
+    for (var p = 0; p < 12; p++) {
+      var angle = (p - 6) * 0.08;                        // 扇形角度
+      var dist = progress * 200 + Math.random() * 30;    // 火焰推进距离
+      var px = db.x + Math.cos(angle) * dist * dir;
+      var py = y + Math.sin(angle) * dist + (Math.random() - 0.5) * 40;
+      var alpha = 1 - progress;
+      var size = 4 + (1 - progress) * 12;
+
+      // 火焰渐变色（红→橙→黄）
+      var r = 255, g = Math.round(100 + progress * 100), b = 0;
+      ctx.fillStyle = 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha.toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.arc(px, py, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 核心火焰锥
+    var grad = ctx.createLinearGradient(db.x, y, db.x + 200 * dir, y);
+    grad.addColorStop(0, 'rgba(255,200,0,0.4)');
+    grad.addColorStop(0.3, 'rgba(255,100,0,0.3)');
+    grad.addColorStop(0.7, 'rgba(255,50,0,0.1)');
+    grad.addColorStop(1, 'rgba(255,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(db.x, y - 25);
+    ctx.lineTo(db.x + 200 * dir, y);
+    ctx.lineTo(db.x, y + 25);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/** 龙吼冲击波 — 金色扩散环 */
+function drawDragonRoars(ctx) {
+  var P = window.UI_POS ? window.UI_POS.lanes : null;
+  var laneY = P ? P.Y : LANE_Y;
+  var now = Date.now();
+
+  for (var i = 0; i < dragonRoars.length; i++) {
+    var dr = dragonRoars[i];
+    var age = now - dr.time;
+    var progress = age / 1200;
+    var y = laneY[dr.lane];
+    var alpha = 1 - progress;
+    var radius = progress * 350;
+
+    // 冲击环
+    ctx.strokeStyle = 'rgba(255,215,0,' + alpha.toFixed(2) + ')';
+    ctx.lineWidth = 4 + (1 - progress) * 8;
+    ctx.beginPath();
+    ctx.arc(dr.x, y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 内层淡环
+    ctx.strokeStyle = 'rgba(255,255,200,' + (alpha * 0.5).toFixed(2) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(dr.x, y, radius * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
 
 function drawParticles(ctx) {
   for (const p of particles) {

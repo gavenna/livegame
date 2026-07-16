@@ -65,6 +65,14 @@ const POS = {
     nameY: { red: 679, blue: 676 },
   },
 
+  // 三线战场
+  lanes: {
+    Y: [390, 575, 760],
+    names: ['北境', '王道', '河谷'],
+    gateRedX: 285,
+    gateBlueX: 1635,
+  },
+
   // 倒计时大数字
   countdown: { y: _H / 2 + 20 },
 

@@ -179,12 +179,12 @@ class GameEngine {
       }
     }
 
-    // 战线到城堡 → 造成伤害
-    const castleDmg = this.battle.getCastleDamage();
-    if (castleDmg) {
-      const targetTeam = castleDmg.target === 'red' ? this.redTeam : this.blueTeam;
-      targetTeam.castleHP -= castleDmg.damage;
-      logger.debug('ENGINE', `战线到城堡: ${castleDmg.target}方 -${castleDmg.damage}HP (frontLine=${this.battle.frontLine})`);
+    // 战线到城堡 → 造成伤害（三线独立判定）
+    const castleDamages = this.battle.getCastleDamage();
+    for (const cd of castleDamages) {
+      const targetTeam = cd.target === 'red' ? this.redTeam : this.blueTeam;
+      targetTeam.castleHP -= cd.damage;
+      logger.debug('ENGINE', `战线到城堡: 线${cd.lane} ${cd.target}方 -${cd.damage}HP`);
     }
 
     // 检查城堡血量
@@ -530,7 +530,12 @@ class GameEngine {
         playerCount: this.blueTeam.players.size,
         castleHP: this.blueTeam.castleHP,
       },
-      frontLine: this.battle.frontLine,
+      frontLines: this.battle.frontLines,        // 三线战线 [n,n,n]
+      frontLine: this.battle.frontLine,          // 向后兼容：三线均值
+      lanes: [0, 1, 2].map(i => ({              // 三线数据
+        frontLine: this.battle.frontLines[i],
+        pressure: this.battle.getLanePressure(i),
+      })),
       time: now - this.startTime,
       phaseElapsed: now - this.phaseStartedAt,
       phaseTotal,
@@ -542,6 +547,7 @@ class GameEngine {
       state.troops = this.battle.troops.map(t => ({
         id: t.id,
         team: t.team,
+        lane: t.lane,          // 所属兵线 0/1/2
         key: t.key,
         x: t.x,
         y: t.y,

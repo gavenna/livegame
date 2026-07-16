@@ -13,25 +13,36 @@
   //  📁 音频文件映射 — 改成你的文件路径即可
   // ============================================================
 
+  // 事件音效
   var SFX_MAP = {
     kill:         'assets/audio/sfx_kill.mp3',
-    swordClang:   'assets/audio/sfx_sword.mp3',
-    arrowWhoosh:  'assets/audio/sfx_arrow.mp3',
-    spawn:        'assets/audio/sfx_spawn.mp3',
-    death:        'assets/audio/sfx_death.mp3',
-    wrathOfGod:   'assets/audio/sfx_wrath.mp3',
+    spawn:        'assets/audio/sfx_spawn.wav',
+    death:        'assets/audio/sfx_death.wav',
+    wrathOfGod:   'assets/audio/sfx_wrath.wav',
     fireArrow:    'assets/audio/sfx_fire_arrow.mp3',
-    siege:        'assets/audio/sfx_siege.mp3',
-    speedBoost:   'assets/audio/sfx_speed_boost.mp3',
-    countdownTick:'assets/audio/sfx_countdown.mp3',
-    victory:      'assets/audio/sfx_victory.mp3',
-    defeat:       'assets/audio/sfx_defeat.mp3',
+    siege:        'assets/audio/sfx_siege.wav',
+    speedBoost:   'assets/audio/sfx_speed_boost.wav',
+    countdownTick:'assets/audio/sfx_countdown.wav',
+    victory:      'assets/audio/sfx_victory.wav',
+    defeat:       'assets/audio/sfx_defeat.wav',
+  };
+
+  // 兵种攻击音效（不同兵种不同声音）
+  var UNIT_ATK_MAP = {
+    militia:      'assets/audio/atk_militia.wav',
+    swordsman:    'assets/audio/atk_swordsman.wav',
+    knight:       'assets/audio/atk_knight.wav',
+    archer:       'assets/audio/atk_archer.wav',
+    catapult:     'assets/audio/atk_catapult.wav',
+    royalGuard:   'assets/audio/atk_royalguard.wav',
+    giant:        'assets/audio/atk_giant.wav',
+    dragonKnight: 'assets/audio/atk_dragon.wav',
   };
 
   var BGM_MAP = {
-    COUNTDOWN: 'assets/audio/bgm_countdown.mp3',
+    COUNTDOWN: 'assets/audio/bgm_countdown.wav',
     PLAYING:   'assets/audio/bgm_playing.mp3',
-    ROUND_END: 'assets/audio/bgm_round_end.mp3',
+    ROUND_END: 'assets/audio/bgm_round_end.wav',
   };
 
   // ============================================================
@@ -85,6 +96,7 @@
     var paths = {};
     Object.keys(SFX_MAP).forEach(function(k) { paths[SFX_MAP[k]] = true; });
     Object.keys(BGM_MAP).forEach(function(k) { paths[BGM_MAP[k]] = true; });
+    Object.keys(UNIT_ATK_MAP).forEach(function(k) { paths[UNIT_ATK_MAP[k]] = true; });
 
     var pathList = Object.keys(paths);
     console.log('[Audio] Loading ' + pathList.length + ' audio files...');
@@ -257,6 +269,19 @@
    * @param {string} name — SFX_MAP 中的 key
    * @param {number} [volMul=1] — 额外音量倍率
    */
+  /** 直接用文件路径播放（用于 UNIT_ATK_MAP 等不以 name 索引的映射） */
+  AudioEngine.prototype._playPath = function(path, dest) {
+    if (!this._loaded || !this._ok()) return;
+    var buf = this._buffers[path];
+    if (!buf) return;
+    var ctx = this.ctx;
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(dest || this.sfxGain);
+    src.start();
+    src.onended = function() { src.disconnect(); };
+  };
+
   AudioEngine.prototype._playSFX = function(name, volMul) {
     if (!this._loaded || !this._ok()) return;
 
@@ -285,6 +310,12 @@
 
   AudioEngine.prototype.playSwordClang = function()   { this._playSFX('swordClang'); };
   AudioEngine.prototype.playArrowWhoosh = function()  { this._playSFX('arrowWhoosh'); };
+  AudioEngine.prototype.playUnitAttack = function(key) {
+    if (!key) return;
+    var path = UNIT_ATK_MAP[key];
+    if (!path) return;
+    this._playPath(path, this.sfxGain);
+  };
   AudioEngine.prototype.playKill = function() {
     var now = Date.now();
     if (now - this._lastKillTime < 60) return; // 节流

@@ -122,7 +122,7 @@ Windows 11 · scoop 包管理 · bash (Git Bash) · `python` 非 `python3` · `n
 
 ## 会话收尾
 
-调 `/wrapup` skill — 代码 / 文档 / 未修复 bug / pycache 四步扫描。
+调 `/wrapup` skill — 代码 / 文档 / 未修复 bug / pycache 四步扫描 / 根据会话上下文精华完成自进化。
 
 ## 偏好
 
