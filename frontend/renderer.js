@@ -68,6 +68,9 @@ const dragonRoars = [];
 /** B9: 城堡箭矢 { team, fromX, fromY, toX, toY, time, duration } */
 const castleArrows = [];
 
+/** B10: 攻城碎石 { target, lane, time } */
+const castleDebris = [];
+
 /** C1: 事件播报 { text, time, color } */
 const eventBanners = [];
 
@@ -290,6 +293,10 @@ function processEvents(state) {
           castleArrows.push({ team: evt.team, fromX: evt.castleX, fromY: fromY, toX: evt.targetX, toY: toY, time: now, duration: 400 });
         }
         break;
+      case 'castle_hit':
+        // B10: 攻城碎石
+        castleDebris.push({ target: evt.target, lane: evt.lane, time: now });
+        break;
       // 抖音社交事件
       case 'like':
         dmText = `❤️ ${evt.playerName} 点赞！`;
@@ -363,6 +370,11 @@ function updateEffects() {
   // B9: 城堡箭矢（0.4s）
   for (let i = castleArrows.length - 1; i >= 0; i--) {
     if (now - castleArrows[i].time > castleArrows[i].duration) castleArrows.splice(i, 1);
+  }
+
+  // B10: 攻城碎石（0.6s）
+  for (let i = castleDebris.length - 1; i >= 0; i--) {
+    if (now - castleDebris[i].time > 600) castleDebris.splice(i, 1);
   }
 
   // C1: 事件播报（2s）
@@ -442,6 +454,9 @@ function renderBattle(ctx, state) {
 
   // 城堡箭矢
   drawCastleArrows(ctx);
+
+  // 攻城碎石
+  drawCastleDebris(ctx);
 
   // 攻城冲击
   drawSiegeImpacts(ctx, state);
@@ -939,6 +954,37 @@ function drawCastleArrows(ctx) {
       ctx.arc(px, py, 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+/** B10: 攻城碎石 — 城堡受击碎片飞溅 */
+function drawCastleDebris(ctx) {
+  var now = Date.now();
+  var P = window.UI_POS ? window.UI_POS.lanes : null;
+  var laneY = P ? P.Y : LANE_Y;
+  for (var i = 0; i < castleDebris.length; i++) {
+    var cd = castleDebris[i];
+    var age = now - cd.time;
+    var progress = age / 600;
+    var alpha = 1 - progress;
+    var cx = cd.target === 'red' ? 90 : DESIGN_W - 90;
+    var cy = laneY[cd.lane] || DESIGN_H * 0.55;
+    // 固定种子让每帧碎片位置一致
+    var seed = cd.time % 1000;
+    for (var p = 0; p < 8; p++) {
+      var angle = (p / 8) * Math.PI * 2 + seed * 0.01;
+      var dist = progress * 60 + p * 5;
+      var px = cx + Math.cos(angle) * dist;
+      var py = cy + Math.sin(angle) * dist - progress * 30;
+      var size = 2 + (1 - progress) * 3;
+      ctx.fillStyle = 'rgba(180,150,120,' + alpha.toFixed(2) + ')';
+      ctx.fillRect(px - size / 2, py - size / 2, size, size);
+    }
+    // 冲击微尘
+    ctx.fillStyle = 'rgba(200,180,150,' + (alpha * 0.3).toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.arc(cx, cy, progress * 40, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 

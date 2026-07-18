@@ -68,6 +68,13 @@ function drawSprite(ctx, troop, scale, now) {
   ctx.shadowBlur = 0;
   ctx.restore();
 
+  // 受击闪白（150ms 内）
+  if (troop.lastHitAt && tNow - troop.lastHitAt < 150) {
+    var flashAlpha = (1 - (tNow - troop.lastHitAt) / 150) * 0.5;
+    ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha.toFixed(2) + ')';
+    ctx.fillRect(drawX, drawY, drawW, drawH);
+  }
+
   if (troop.animState !== 'death' && troop.hp !== undefined && troop.maxHp && troop.hp < troop.maxHp) {
     const barW = drawW + 6, barH = 4, barY = drawY - 8;
     const hpPct = Math.max(0, troop.hp / troop.maxHp);

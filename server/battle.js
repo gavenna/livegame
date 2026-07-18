@@ -245,7 +245,9 @@ class Battle {
         const blueDmg = getCounterDamage(closest, rt, bal.COUNTER_MULTIPLIER);
 
         closest.hp -= redDmg;
+        closest._lastHitAt = now;
         rt.hp -= blueDmg;
+        rt._lastHitAt = now;
 
         if (closest.hp <= 0) {
           this.events.push({ type: 'kill', troopId: closest.id, team: 'blue', key: closest.key, killerId: rt.ownerId, killerName: rt.ownerName, time: now });
@@ -263,6 +265,7 @@ class Battle {
             if (Math.abs(rt.x - bt.x) < rt.attackRange * 2 && bt.lane === rt.lane) {
               const splashDmg = rt.damage * 0.3;
               bt.hp -= splashDmg;
+              bt._lastHitAt = now;
               if (bt.hp <= 0) {
                 this.events.push({ type: 'kill', troopId: bt.id, team: 'blue', key: bt.key, killerId: rt.ownerId, killerName: rt.ownerName, time: now });
               }
@@ -280,6 +283,7 @@ class Battle {
             if (rt.hp <= 0) continue;
             if (Math.abs(bt.x - rt.x) < bt.attackRange * 2 && rt.lane === bt.lane) {
               rt.hp -= bt.damage * 0.3;
+              rt._lastHitAt = now;
               if (rt.hp <= 0) {
                 this.events.push({ type: 'kill', troopId: rt.id, team: 'red', key: rt.key, killerId: bt.ownerId, killerName: bt.ownerName, time: now });
               }
@@ -308,6 +312,7 @@ class Battle {
           // 只打前方扇形区域（同方向 + 范围内）
           if (dist < t.attackRange && dir === facingDir) {
             enemy.hp -= t.damage;
+            enemy._lastHitAt = now;
             hitCount++;
             // 施加灼烧 debuff
             enemy._burnUntil = now + t.breathTime;
@@ -346,6 +351,7 @@ class Battle {
       if (t.animState === 'death' || t.hp <= 0) continue;
       if (t._burnUntil && t._burnUntil > now && t._burnDmg > 0) {
         t.hp -= t._burnDmg;
+        t._lastHitAt = now;
         if (t.hp <= 0) {
           this.events.push({ type: 'kill', troopId: t.id, team: t.team, key: t.key, killerId: 'dragonFire', killerName: '龙焰', time: now });
         }
@@ -379,6 +385,7 @@ class Battle {
       }
       if (closest) {
         closest.hp -= castleCfg.DAMAGE;
+        closest._lastHitAt = now6;
         this._lastCastleShot[team] = now6;
         this.events.push({
           type: 'castle_arrow',
@@ -459,9 +466,17 @@ class Battle {
         const rebound = bal.FRONTLINE_MAX * 0.3;
         const oldFL = this.frontLines[i];
         this.frontLines[i] = Math.sign(this.frontLines[i]) * (bal.FRONTLINE_MAX - rebound);
-        logger.info(`[BATTLE] 战线到城堡! 线${i} ${this.frontLines[i] > 0 ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
+        const target = this.frontLines[i] > 0 ? 'blue' : 'red';
+        logger.info(`[BATTLE] 战线到城堡! 线${i} ${target === 'blue' ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
+        this.events.push({
+          type: 'castle_hit',
+          target,
+          lane: i,
+          damage: dmg,
+          time: Date.now(),
+        });
         results.push({
-          target: this.frontLines[i] > 0 ? 'blue' : 'red',
+          target,
           damage: dmg,
           lane: i,
         });

@@ -180,6 +180,10 @@ class GameEngine {
           this.pendingEvents.push(event);
           break;
         }
+        case 'castle_hit': {
+          this.pendingEvents.push(event);
+          break;
+        }
       }
     }
 
@@ -592,6 +596,7 @@ class GameEngine {
         boss: t.key === 'giant' || t.key === 'dragonKnight',
         ranged: t.ranged,
         animState: t.animState || 'idle',
+        lastHitAt: t._lastHitAt || 0,
       }));
 
       state.leaderboard = this.ranking.getLeaderboard(10);
