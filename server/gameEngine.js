@@ -298,10 +298,12 @@ class GameEngine {
     if (!text) return;
     text = text.trim();
 
+    // 所有弹幕都推送到前端显示（指令类也不例外，否则观众看不到反馈）
+    this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
+
     const cmd = this.config.DANMAKU_COMMANDS[text];
     if (!cmd) {
       logger.info(`[DANMAKU] 弹幕: "${text}" (${playerName || playerId})`);
-      this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
       return;
     }
 
