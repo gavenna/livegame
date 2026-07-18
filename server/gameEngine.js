@@ -59,6 +59,14 @@ class GameEngine {
     // 翻盘追踪（每局重置）
     this._comebackState = { red: false, blue: false, redMaxFL: 0, blueMaxFL: 0 };
 
+    // 随机事件（每局重置）
+    this._nextRandomEvent = 0;
+    this._randomEventPool = [
+      { type: 'reinforce', name: '援军到达', textFn: function(t) { return t + '方援军到达！'; } },
+      { type: 'fire_rain', name: '天降火雨', textFn: function(t) { return '🔥 天降火雨袭击' + t + '方！'; } },
+      { type: 'king_charge', name: '国王亲征', textFn: function(t) { return '👑 国王亲征' + t + '方！'; } },
+    ];
+
     // 注册 WS 消息处理
     onMessage((msg) => this.handleMessage(msg));
   }
@@ -103,6 +111,7 @@ class GameEngine {
     this.battle = new Battle();
     this.roundStats = { kills: new Map(), damageDealt: new Map(), gifts: new Map() };
     this._comebackState = { red: false, blue: false, redMaxFL: 0, blueMaxFL: 0 };
+    this._nextRandomEvent = Date.now() + 40000 + Math.random() * 20000; // 40-60s 后首次事件
     this.startTime = Date.now();
     this.phaseStartedAt = Date.now();  // COUNTDOWN 阶段起点
 
@@ -188,7 +197,8 @@ class GameEngine {
         case 'soldier_attack_castle':
         case 'comeback':
         case 'chest_open':
-        case 'chest_reveal': {
+        case 'chest_reveal':
+        case 'random_event': {
           this.pendingEvents.push(event);
           break;
         }
@@ -233,6 +243,32 @@ class GameEngine {
       cs.blue = true;
       this.pendingEvents.push({ type: 'comeback', team: 'blue', text: '霜狼联盟绝地反击！！', time: Date.now() });
       logger.info('[ENGINE] 🔥 翻盘时刻！蓝方绝地反击！');
+    }
+
+    // 随机事件
+    var nowEvt = Date.now();
+    if (nowEvt >= this._nextRandomEvent) {
+      this._nextRandomEvent = nowEvt + 40000 + Math.random() * 20000;
+      var evt = this._randomEventPool[Math.floor(Math.random() * this._randomEventPool.length)];
+      var evtTeam = Math.random() < 0.5 ? 'red' : 'blue';
+      var evtName = evt.textFn(evtTeam === 'red' ? '炎龙帝国' : '霜狼联盟');
+      var enemyTeam = evtTeam === 'red' ? 'blue' : 'red';
+      logger.info('[ENGINE] ⚡ 随机事件: ' + evt.name + ' → ' + evtTeam + '方');
+      // 执行事件效果
+      if (evt.type === 'reinforce') {
+        for (var ri = 0; ri < 8; ri++) {
+          this.battle.spawnTroop(evtTeam, 'militia', 'event', evtName);
+        }
+      } else if (evt.type === 'fire_rain') {
+        for (var fi = 0; fi < this.battle.troops.length; fi++) {
+          var ft = this.battle.troops[fi];
+          if (ft.animState === 'death' || ft.hp <= 0) continue;
+          if (ft.team === enemyTeam) { ft.hp -= 20; ft._lastHitAt = nowEvt; }
+        }
+      } else if (evt.type === 'king_charge') {
+        this.battle.spawnTroop(evtTeam, 'giant', 'event', evtName);
+      }
+      this.pendingEvents.push({ type: 'random_event', team: evtTeam, text: evtName, evtType: evt.type, time: nowEvt });
     }
 
     // 动态平衡

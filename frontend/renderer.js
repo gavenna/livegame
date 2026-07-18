@@ -366,6 +366,11 @@ function processEvents(state) {
         eventBanners.push({ text: '🎁 ' + evt.text, time: now, color: '#FFD700' });
         if (window.audioEngine) window.audioEngine.playWrathOfGod();
         break;
+      case 'random_event':
+        // 战场随机事件
+        eventBanners.push({ text: '⚡ ' + evt.text, time: now, color: evt.evtType === 'fire_rain' ? '#FF4500' : '#FFD700' });
+        if (window.audioEngine) window.audioEngine.playWarDrum();
+        break;
       // 抖音社交事件
       case 'like':
         dmText = `❤️ ${evt.playerName} 点赞！`;
