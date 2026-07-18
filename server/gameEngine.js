@@ -274,6 +274,17 @@ class GameEngine {
     // 动态平衡
     this.applyBalance();
 
+    // 指挥官伤害加成 (×1.3)
+    var cmdrs = this._getCommanders();
+    for (var ci = 0; ci < this.battle.troops.length; ci++) {
+      var ct = this.battle.troops[ci];
+      if (ct.animState === 'death') continue;
+      if ((ct.team === 'red' && ct.ownerId === cmdrs.red) || (ct.team === 'blue' && ct.ownerId === cmdrs.blue)) {
+        if (!ct._origDmg) ct._origDmg = ct.damage;
+        ct.damage = Math.round(ct._origDmg * 1.3);
+      }
+    }
+
     this.pushState();
   }
 
@@ -627,6 +638,16 @@ class GameEngine {
     return best;
   }
 
+  _getCommanders() {
+    var redCmdr = null, blueCmdr = null;
+    var redMax = 0, blueMax = 0;
+    this.roundStats.damageDealt.forEach(function(dmg, pid) {
+      if (this.redTeam.players.has(pid) && dmg > redMax) { redCmdr = pid; redMax = dmg; }
+      if (this.blueTeam.players.has(pid) && dmg > blueMax) { blueCmdr = pid; blueMax = dmg; }
+    }.bind(this));
+    return { red: redCmdr, blue: blueCmdr };
+  }
+
   /** 推送当前状态到前端 */
   pushState() {
     const now = Date.now();
@@ -658,11 +679,20 @@ class GameEngine {
       phaseTotal,
       maxHP: this.config.CASTLE_HP,
       devMode: this.config.DEV_MODE,
+      commanders: { red: redCmdr, blue: blueCmdr },
       canvas: {
         width: this.config.CANVAS_WIDTH,
         height: this.config.CANVAS_HEIGHT,
       },
     };
+
+    // 指挥官 = 每方伤害最高的玩家
+    var redCmdr = null, blueCmdr = null;
+    var redMaxDmg = 0, blueMaxDmg = 0;
+    this.roundStats.damageDealt.forEach(function(dmg, pid) {
+      if (this.redTeam.players.has(pid) && dmg > redMaxDmg) { redCmdr = pid; redMaxDmg = dmg; }
+      if (this.blueTeam.players.has(pid) && dmg > blueMaxDmg) { blueCmdr = pid; blueMaxDmg = dmg; }
+    }.bind(this));
 
     if (this.state === STATE.PLAYING || this.state === STATE.ROUND_END) {
       state.troops = this.battle.troops.map(t => ({
@@ -683,6 +713,7 @@ class GameEngine {
         ranged: t.ranged,
         animState: t.animState || 'idle',
         lastHitAt: t._lastHitAt || 0,
+        isCommander: (t.team === 'red' && t.ownerId === redCmdr) || (t.team === 'blue' && t.ownerId === blueCmdr),
       }));
 
       state.leaderboard = this.ranking.getLeaderboard(10);

@@ -68,6 +68,18 @@ function drawSprite(ctx, troop, scale, now) {
   ctx.shadowBlur = 0;
   ctx.restore();
 
+  // 指挥官金色光环脉动（画在精灵外层）
+  if (troop.isCommander && troop.animState !== 'death') {
+    var pulse = 1 + Math.sin(tNow * 0.005) * 0.2;
+    var glowRadius = Math.round(12 * pulse);
+    var grad = ctx.createRadialGradient(x, y, drawW * 0.3, x, y, drawW * 0.7 + glowRadius);
+    grad.addColorStop(0, 'rgba(255,215,0,0)');
+    grad.addColorStop(0.5, 'rgba(255,215,0,' + (0.25 * pulse).toFixed(2) + ')');
+    grad.addColorStop(1, 'rgba(255,180,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - drawW - glowRadius, y - drawH - glowRadius, (drawW + glowRadius) * 2, (drawH + glowRadius) * 2);
+  }
+
   // 受击闪白（150ms 内）
   if (troop.lastHitAt && tNow - troop.lastHitAt < 150) {
     var flashAlpha = (1 - (tNow - troop.lastHitAt) / 150) * 0.5;
