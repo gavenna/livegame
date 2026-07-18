@@ -176,7 +176,7 @@ class EventTranslator {
     }
 
     logger.info(`[DOUYIN] ${playerName} 送 ${giftName}(id=${giftId}) 单价${unitPrice}×${count}=${totalPrice}钻 → ${troop}`);
-    return [{ type: 'gift', troopKey: troop, giftId, playerId, playerName }];
+    return [{ type: 'gift', troopKey: troop, giftId, giftName: giftName || '', playerId, playerName }];
   }
 
   _like(raw, playerId, playerName) {
@@ -186,16 +186,13 @@ class EventTranslator {
     this.likeCooldowns.set(playerId, Date.now());
 
     const likeCount = raw.count || 0;
+    const name = playerName || playerId;
     if (likeCount >= 100) {
-      return [
-        { type: 'danmaku', text: `❤️ ${playerName} 连续点赞×${likeCount}！`, playerId, playerName },
-        { type: 'danmaku', text: '杀', playerId, playerName },
-      ];
+      return [{ type: 'danmaku', text: '杀', playerId, playerName,
+        displayText: `感谢 ${name} 的 ${likeCount} 连赞！⚔ 民兵前来助阵` }];
     }
-    return [
-      { type: 'danmaku', text: `❤️ ${playerName} 点赞`, playerId, playerName },
-      { type: 'danmaku', text: '赞', playerId, playerName },
-    ];
+    return [{ type: 'danmaku', text: '赞', playerId, playerName,
+      displayText: `感谢 ${name} 的点赞！⚔ 民兵前来助阵` }];
   }
 
   _follow(raw, playerId, playerName) {
@@ -204,7 +201,8 @@ class EventTranslator {
     if (Date.now() - last < cdMs) return [];
     this.followCooldowns.set(playerId, Date.now());
 
-    const msgs = [{ type: 'danmaku', text: `⭐ ${playerName} 关注了直播间！`, playerId, playerName }];
+    const msgs = [{ type: 'danmaku', text: `⭐ ${playerName} 关注了直播间！`, playerId, playerName,
+      displayText: `⭐ ${playerName || playerId} 关注了直播间！` }];
     const reward = ADAPTER_CFG.FOLLOW_REWARD_TROOP;
     if (reward) {
       for (let i = 0; i < (ADAPTER_CFG.FOLLOW_REWARD_COUNT || 1); i++) {
@@ -232,7 +230,8 @@ class EventTranslator {
     const last = this.shareCooldowns.get(playerId) || 0;
     if (Date.now() - last < cdMs) return [];
     this.shareCooldowns.set(playerId, Date.now());
-    return [{ type: 'danmaku', text: `🔗 ${playerName} 分享了直播间！`, playerId, playerName }];
+    return [{ type: 'danmaku', text: `🔗 ${playerName} 分享了直播间！`, playerId, playerName,
+      displayText: `🔗 ${playerName || playerId} 分享了直播间！` }];
   }
 }
 

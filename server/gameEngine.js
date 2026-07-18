@@ -260,11 +260,11 @@ class GameEngine {
         break;
       case 'danmaku':
         assert.playerId(msg.playerId, 'handleMessage:danmaku');
-        this.handleDanmaku(msg.text, msg.playerId, msg.playerName);
+        this.handleDanmaku(msg.text, msg.playerId, msg.playerName, msg.displayText);
         break;
       case 'gift':
         assert.playerId(msg.playerId, 'handleMessage:gift');
-        this.handleGift(msg.troopKey || msg.giftId, msg.playerId, msg.playerName);
+        this.handleGift(msg.troopKey || msg.giftId, msg.playerId, msg.playerName, msg.giftName);
         break;
       case 'admin':
         this.handleAdmin(msg.action);
@@ -294,13 +294,16 @@ class GameEngine {
     this.ranking.getOrCreate(playerId);
   }
 
-  handleDanmaku(text, playerId, playerName) {
+  handleDanmaku(text, playerId, playerName, displayText) {
     if (!text) return;
     text = text.trim();
 
     const cmd = this.config.DANMAKU_COMMANDS[text];
     if (!cmd) {
       logger.info(`[DANMAKU] 弹幕: "${text}" (${playerName || playerId})`);
+      if (displayText) {
+        this.pendingEvents.push({ type: 'danmaku_text', text: displayText, playerId, playerName, time: Date.now() });
+      }
       return;
     }
 
@@ -333,9 +336,13 @@ class GameEngine {
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
           const name = playerName || playerId;
           let spawnMsg;
-          if (text === '赞') spawnMsg = `${name} 为主播点赞！`;
-          else if (text === '666') spawnMsg = `${name} 为主播助威！`;
-          else spawnMsg = `${name} 号召民兵出击！`;  // '杀'
+          if (displayText) {
+            spawnMsg = displayText;
+          } else if (text === '666') {
+            spawnMsg = `${name} 为主播助威！⚔ 民兵出击`;
+          } else {
+            spawnMsg = `${name} 号召民兵出击！`;  // '杀'
+          }
           this.pendingEvents.push({ type: 'danmaku_text', text: spawnMsg, playerId, playerName, time: Date.now() });
         }
         break;
@@ -356,7 +363,7 @@ class GameEngine {
     }
   }
 
-  handleGift(troopKey, playerId, playerName) {
+  handleGift(troopKey, playerId, playerName, giftName) {
     assert.playerId(playerId, 'handleGift');
     if (!troopKey) { logger.warn(`[GIFT] troopKey 缺失 (player=${playerId})`); return; }
     if (this.state !== STATE.PLAYING) {
@@ -374,33 +381,41 @@ class GameEngine {
     const troopDef = this.config.TROOPS[actualKey];
     const troopName = troopDef ? troopDef.name : actualKey;
     const isPremium = troopDef && troopDef.cost >= 99 && !troopDef.globalSkill && !troopDef.siege;
+    const name = playerName || playerId;
+    const thanks = giftName ? `感谢 ${name} 的「${giftName}」！` : '';
 
     if (isPremium) {
+      const previewText = thanks
+        ? `${thanks} 正在召唤 ${troopName}…`
+        : `${name} 正在召唤 ${troopName}…`;
       this.pendingEvents.push({
         type: 'spawn_preview',
         team, key: actualKey, ownerId: playerId, ownerName: playerName,
-        text: `${playerName || playerId} 正在召唤 ${troopName}…`,
+        text: previewText,
         time: Date.now(),
       });
-      logger.info(`[GIFT] ${playerName || playerId} 预告召唤 ${actualKey}`);
+      logger.info(`[GIFT] ${name} 预告召唤 ${actualKey}`);
 
       setTimeout(() => {
         const delayed = this.battle.spawnTroop(team, actualKey, playerId, playerName);
         if (delayed) {
           const giftScore = delayed.damage * this.config.SCORE.GIFT_MULTIPLIER;
           this.addStat('gifts', playerId, giftScore);
-          logger.info(`[GIFT] ${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${delayed.damage} 积分:+${giftScore})`);
+          logger.info(`[GIFT] ${name} 送出 ${actualKey} → ${team}方 (伤害:${delayed.damage} 积分:+${giftScore})`);
         }
       }, 1000);
     } else {
       const troop = this.battle.spawnTroop(team, actualKey, playerId, playerName);
       if (troop) {
         if (!troopDef.globalSkill && !troopDef.siege) {
-          this.pendingEvents.push({ type: 'danmaku_text', text: `${playerName || playerId} 召唤了 ${troopName}！`, playerId, playerName, time: Date.now() });
+          const msgText = thanks
+            ? `${thanks} 召唤了 ${troopName}！`
+            : `${name} 召唤了 ${troopName}！`;
+          this.pendingEvents.push({ type: 'danmaku_text', text: msgText, playerId, playerName, time: Date.now() });
         }
         const giftScore = troop.damage * this.config.SCORE.GIFT_MULTIPLIER;
         this.addStat('gifts', playerId, giftScore);
-        logger.info(`[GIFT] ${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
+        logger.info(`[GIFT] ${name} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
       }
     }
   }
