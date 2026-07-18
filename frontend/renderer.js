@@ -167,18 +167,31 @@ function gameLoop(timestamp) {
   // 更新特效
   updateEffects();
 
-  // 渲染三层（应用分辨率缩放）
+  // 震屏：城堡 <10% 时画面微震
+  var redPct = state.red ? state.red.castleHP / (state.maxHP || 10000) : 1;
+  var bluePct = state.blue ? state.blue.castleHP / (state.maxHP || 10000) : 1;
+  if (redPct < 0.1 || bluePct < 0.1) {
+    shakeX = (Math.random() - 0.5) * 6;
+    shakeY = (Math.random() - 0.5) * 6;
+  } else {
+    shakeX = 0; shakeY = 0;
+  }
+
+  // 渲染三层（应用分辨率缩放 + 震屏偏移）
   battleCtx.save(); battleCtx.scale(canvasScaleX, canvasScaleY);
+  if (shakeX || shakeY) battleCtx.translate(shakeX, shakeY);
   renderBattle(battleCtx, state);
   battleCtx.restore();
 
   if (window.renderUI) {
     uiCtx.save(); uiCtx.scale(canvasScaleX, canvasScaleY);
+    if (shakeX || shakeY) uiCtx.translate(shakeX, shakeY);
     window.renderUI(uiCtx, state);
     uiCtx.restore();
   }
 
   danmakuCtx.save(); danmakuCtx.scale(canvasScaleX, canvasScaleY);
+  if (shakeX || shakeY) danmakuCtx.translate(shakeX, shakeY);
   renderDanmaku(danmakuCtx, state);
   danmakuCtx.restore();
 
@@ -190,6 +203,9 @@ var lastEventHash = '';
 
 /** BGM 状态跟踪 */
 var lastAudioState = '';
+
+/** 震屏偏移 */
+var shakeX = 0, shakeY = 0;
 
 // === 事件处理 ===
 
@@ -695,34 +711,84 @@ function drawCastles(ctx, state) {
 }
 
 /** E2: 城堡受损覆盖层 */
+/** E2: 城堡损毁四阶段视觉 */
 function drawCastleDamageOverlay(ctx, cx, cy, hpPct, team) {
-  const now = Date.now();
-  if (hpPct < 0.5) {
-    // 冒烟
-    for (let i = 0; i < 3; i++) {
-      const smokeX = cx + (Math.sin(now * 0.002 + i * 2) * 20);
-      const smokeY = cy - 20 - i * 15 - (now * 0.03 % 40);
-      const alpha = 0.15 + (hpPct < 0.2 ? 0.1 : 0);
-      ctx.fillStyle = `rgba(80,80,80,${alpha})`;
+  var now = Date.now();
+  var seed = (team === 'red' ? 1 : -1) * 1000;
+
+  // === 阶段 2: 受损 (40-70%) — 裂缝 + 浓烟 ===
+  if (hpPct < 0.7) {
+    var stage2Alpha = hpPct < 0.4 ? 1 : (0.7 - hpPct) / 0.3;
+    // 城墙裂缝
+    ctx.strokeStyle = 'rgba(30,20,10,' + (stage2Alpha * 0.6).toFixed(2) + ')';
+    ctx.lineWidth = 1.5;
+    for (var c = 0; c < 3; c++) {
+      var sx = cx - 30 + c * 25 + Math.sin(seed + c) * 10;
+      var sy = cy - 20 + Math.cos(seed + c * 2) * 15;
       ctx.beginPath();
-      ctx.arc(smokeX, smokeY, 8 + i * 3, 0, Math.PI * 2);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + 5 + Math.sin(c) * 8, sy + 12 + c * 4);
+      ctx.lineTo(sx - 3 + c * 2, sy + 18 + c * 3);
+      ctx.stroke();
+    }
+    // 浓烟
+    var smokeCount = hpPct < 0.3 ? 5 : 3;
+    for (var s = 0; s < smokeCount; s++) {
+      var smokeX = cx + Math.sin(now * 0.002 + s * 2.5) * 25;
+      var smokeY = cy - 25 - s * 12 - (now * 0.04 % 50);
+      var smokeAlpha = (0.12 + stage2Alpha * 0.15).toFixed(2);
+      ctx.fillStyle = 'rgba(50,45,40,' + smokeAlpha + ')';
+      ctx.beginPath();
+      ctx.arc(smokeX, smokeY, 7 + s * 3, 0, Math.PI * 2);
       ctx.fill();
     }
   }
-  if (hpPct < 0.2) {
-    // 冒火
-    for (let i = 0; i < 2; i++) {
-      const fireX = cx + (Math.sin(now * 0.005 + i) * 15);
-      const fireY = cy - 10 - (now * 0.02 % 20);
-      const alpha = 0.3 + Math.random() * 0.2;
-      const grad = ctx.createRadialGradient(fireX, fireY, 2, fireX, fireY, 10);
-      grad.addColorStop(0, `rgba(255,100,0,${alpha})`);
-      grad.addColorStop(1, `rgba(255,50,0,0)`);
+
+  // === 阶段 3: 重创 (10-40%) — 崩塌缺口 + 大火 ===
+  if (hpPct < 0.4) {
+    var stage3Alpha = hpPct < 0.1 ? 1 : (0.4 - hpPct) / 0.3;
+    // 城墙缺口（深色不规则块遮罩）
+    ctx.fillStyle = 'rgba(15,10,5,' + (stage3Alpha * 0.7).toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.moveTo(cx - 35, cy + 10);
+    ctx.lineTo(cx - 20, cy - 25);
+    ctx.lineTo(cx + 5, cy - 20);
+    ctx.lineTo(cx + 10, cy + 15);
+    ctx.closePath();
+    ctx.fill();
+    // 缺口边缘碎石
+    for (var d = 0; d < 5; d++) {
+      var dx = cx - 25 + d * 12;
+      var dy = cy - 15 + Math.sin(d * 1.5) * 10;
+      ctx.fillStyle = 'rgba(120,100,70,' + (stage3Alpha * 0.5).toFixed(2) + ')';
+      ctx.fillRect(dx, dy, 3 + d % 3, 3 + d % 2);
+    }
+    // 大火
+    for (var f = 0; f < 4; f++) {
+      var fireX = cx - 15 + Math.sin(now * 0.006 + f) * 20;
+      var fireY = cy - 5 - f * 8 - (now * 0.03 % 25);
+      var fireAlpha = (stage3Alpha * (0.25 + Math.random() * 0.2)).toFixed(2);
+      var grad = ctx.createRadialGradient(fireX, fireY, 3, fireX, fireY, 14 + f * 3);
+      grad.addColorStop(0, 'rgba(255,150,20,' + fireAlpha + ')');
+      grad.addColorStop(0.5, 'rgba(255,60,0,' + (parseFloat(fireAlpha) * 0.6).toFixed(2) + ')');
+      grad.addColorStop(1, 'rgba(255,20,0,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(fireX, fireY, 10, 0, Math.PI * 2);
+      ctx.arc(fireX, fireY, 14 + f * 3, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // === 阶段 4: 濒毁 (<10%) — 红色脉冲辉光 ===
+  if (hpPct < 0.1) {
+    var pulseAlpha = (0.3 + Math.sin(now * 0.008) * 0.2).toFixed(2);
+    var glow = ctx.createRadialGradient(cx, cy, 20, cx, cy, 100);
+    glow.addColorStop(0, 'rgba(255,50,0,' + pulseAlpha + ')');
+    glow.addColorStop(1, 'rgba(255,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 100, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
