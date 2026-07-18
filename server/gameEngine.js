@@ -152,7 +152,9 @@ class GameEngine {
   tick() {
     if (this.state !== STATE.PLAYING) return;
 
-    const battleResult = this.battle.update(this.config.BATTLE_TICK_MS);
+    const battleResult = this.battle.update(this.config.BATTLE_TICK_MS,
+      this.redTeam.castleHP / this.config.CASTLE_HP,
+      this.blueTeam.castleHP / this.config.CASTLE_HP);
 
     // 处理战斗事件
     for (const event of battleResult.events) {

@@ -143,7 +143,7 @@ class Battle {
   }
 
   /** 每 tick 更新战斗状态 (100ms) */
-  update(deltaMs) {
+  update(deltaMs, castleHpRed, castleHpBlue) {
     const dt = deltaMs / 1000;
     const bal = config.BALANCE;
 
@@ -376,11 +376,16 @@ class Battle {
       }
     }
 
-    // === 6. 城堡箭塔防御 ===
+    // === 6. 城堡箭塔防御（HP越低越猛） ===
     const castleCfg = config.CASTLE_DEFENSE;
     const now6 = Date.now();
     for (const team of ['red', 'blue']) {
-      if (now6 - this._lastCastleShot[team] < castleCfg.INTERVAL) continue;
+      var hpPct = team === 'red' ? (castleHpRed || 1) : (castleHpBlue || 1);
+      var interval = castleCfg.INTERVAL;
+      var dmg = castleCfg.DAMAGE;
+      if (hpPct < 0.2) { interval *= 0.5; dmg *= 2.4; }       // 绝境: 1s/箭, 12伤害
+      else if (hpPct < 0.4) { interval *= 0.75; dmg *= 1.6; }  // 强化: 1.5s/箭, 8伤害
+      if (now6 - this._lastCastleShot[team] < interval) continue;
       const castleX = team === 'red' ? 90 : CANVAS_W - 90;
       const enemies = aliveTroops.filter(t => t.team !== team && t.hp > 0);
       let closest = null, closestDist = castleCfg.RANGE;
@@ -389,7 +394,7 @@ class Battle {
         if (dist < closestDist) { closest = e; closestDist = dist; }
       }
       if (closest) {
-        closest.hp -= castleCfg.DAMAGE;
+        closest.hp -= dmg;
         closest._lastHitAt = now6;
         this._lastCastleShot[team] = now6;
         this.events.push({
@@ -399,7 +404,7 @@ class Battle {
           targetX: closest.x,
           targetY: closest.y,
           targetLane: closest.lane,
-          damage: castleCfg.DAMAGE,
+          damage: dmg,
           castleX,
           time: now6,
         });
