@@ -56,6 +56,9 @@ class GameEngine {
     // 事件队列（本 tick 产生的事件，推给前端后清空）
     this.pendingEvents = [];
 
+    // 翻盘追踪（每局重置）
+    this._comebackState = { red: false, blue: false, redMaxFL: 0, blueMaxFL: 0 };
+
     // 注册 WS 消息处理
     onMessage((msg) => this.handleMessage(msg));
   }
@@ -99,6 +102,7 @@ class GameEngine {
     this.blueTeam.players.clear();
     this.battle = new Battle();
     this.roundStats = { kills: new Map(), damageDealt: new Map(), gifts: new Map() };
+    this._comebackState = { red: false, blue: false, redMaxFL: 0, blueMaxFL: 0 };
     this.startTime = Date.now();
     this.phaseStartedAt = Date.now();  // COUNTDOWN 阶段起点
 
@@ -181,7 +185,8 @@ class GameEngine {
           break;
         }
         case 'castle_hit':
-        case 'soldier_attack_castle': {
+        case 'soldier_attack_castle':
+        case 'comeback': {
           this.pendingEvents.push(event);
           break;
         }
@@ -206,6 +211,26 @@ class GameEngine {
       logger.info(`[ENGINE] 城堡摧毁 — 红:${this.redTeam.castleHP}HP 蓝:${this.blueTeam.castleHP}HP → 回合结束`);
       this.endRound();
       return;
+    }
+
+    // 翻盘检测：劣势方反向推过中线
+    var avgFL = this.battle.frontLines.reduce(function(a, b) { return a + b; }, 0) / 3;
+    var cs = this._comebackState;
+    if (avgFL > 0) { cs.redMaxFL = Math.max(cs.redMaxFL, avgFL); }
+    else { cs.blueMaxFL = Math.max(cs.blueMaxFL, -avgFL); }
+    var redHpPct = this.redTeam.castleHP / this.config.CASTLE_HP;
+    var blueHpPct = this.blueTeam.castleHP / this.config.CASTLE_HP;
+    // 红方翻盘：红方HP劣势但战线反推到蓝方>400
+    if (!cs.red && redHpPct < 0.4 && blueHpPct > 0.6 && avgFL > 400 && cs.redMaxFL > 400) {
+      cs.red = true;
+      this.pendingEvents.push({ type: 'comeback', team: 'red', text: '炎龙帝国绝地反击！！', time: Date.now() });
+      logger.info('[ENGINE] 🔥 翻盘时刻！红方绝地反击！');
+    }
+    // 蓝方翻盘
+    if (!cs.blue && blueHpPct < 0.4 && redHpPct > 0.6 && avgFL < -400 && cs.blueMaxFL > 400) {
+      cs.blue = true;
+      this.pendingEvents.push({ type: 'comeback', team: 'blue', text: '霜狼联盟绝地反击！！', time: Date.now() });
+      logger.info('[ENGINE] 🔥 翻盘时刻！蓝方绝地反击！');
     }
 
     // 动态平衡

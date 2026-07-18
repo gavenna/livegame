@@ -277,10 +277,18 @@ function processEvents(state) {
         // C2: 连杀追踪
         playerKillCounts[evt.killerId] = (playerKillCounts[evt.killerId] || 0) + 1;
         const kc = playerKillCounts[evt.killerId];
-        if (kc === 5) {
-          eventBanners.push({ text: `${evt.killerName} 正在大杀特杀！(×5)`, time: now, color: '#FF6347' });
+        if (kc === 3) {
+          eventBanners.push({ text: `⚔ ${evt.killerName} 正在大杀特杀！`, time: now, color: '#FF8C00' });
+        } else if (kc === 5) {
+          eventBanners.push({ text: `🔥 ${evt.killerName} 已经无人能挡！`, time: now, color: '#FF6347' });
         } else if (kc === 10) {
-          eventBanners.push({ text: `${evt.killerName} 已经主宰战场！(×10)`, time: now, color: '#FF4500' });
+          eventBanners.push({ text: `💀 ${evt.killerName} 主宰了战场！`, time: now, color: '#FF4500' });
+        } else if (kc === 15) {
+          eventBanners.push({ text: `👑 ${evt.killerName} 如同战神降临！！`, time: now, color: '#FFD700' });
+        } else if (kc === 20) {
+          eventBanners.push({ text: `⚡ ${evt.killerName} 屠戮众生！！！`, time: now, color: '#FF0000' });
+        } else if (kc === 25) {
+          eventBanners.push({ text: `🌟 ${evt.killerName} 超越神的杀戮！！！！`, time: now, color: '#FFFFFF' });
         }
         // B1: 伤害数字
         damageNumbers.push({ x: killFlashes[killFlashes.length - 1].x, y: killFlashes[killFlashes.length - 1].y - 20, value: '💀', color: '#FF4444', time: now });
@@ -342,6 +350,11 @@ function processEvents(state) {
         // B10: 单兵攻城碎石（士兵位置小爆发）
         castleDebris.push({ target: evt.team === 'red' ? 'blue' : 'red', lane: evt.lane, time: now, x: evt.x, y: evt.y });
         if (window.audioEngine) window.audioEngine.playCastleHit();
+        break;
+      case 'comeback':
+        // 翻盘时刻 — 全屏大字
+        eventBanners.push({ text: evt.text, time: now, color: '#FFD700' });
+        if (window.audioEngine) window.audioEngine.playWarDrum();
         break;
       // 抖音社交事件
       case 'like':
