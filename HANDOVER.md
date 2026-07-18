@@ -6,23 +6,51 @@
 ## current_state
 
 ### verified
-- 可编译: 是（`node --check` 全部 server JS 通过）
-- 可运行: 是（`.\start.ps1` 正常，`chcp 65001` 防乱码）
-- 日志系统: Pino（开发=pino-pretty→终端，生产=`$env:NODE_ENV="production"`→server/logs/）
-- 抖音接入: douyin.js 连接可遇AI :12011，翻译 msgType→游戏指令
-- B站接入: bilibili-relay.py（Python logging + RotatingFileHandler）
+- 可编译: 是（所有 server JS + frontend JS `node --check` 通过）
+- 可运行: 是（`.\start.ps1` 正常，B站+抖音双弹幕源就位）
+- 日志系统: Pino（开发=pino-pretty→终端，生产=`$env:NODE_ENV="production"`→server/logs/，`Get-Content -Wait -Encoding UTF8 | Select-String` 实时筛选）
+- 音效库: `D:\tmp\游戏动画音效全集\游戏动画音效全集`，几万个按名命名的音效，新增音效直接搜
 
-### assumed
-- 弹幕数据已到 gameEngine（WS 日志确认），但画面显示待验证
+### 本轮完成（AP2→AP4）
+
+**AP2→AP3 战斗表现层**（6/6 全部完成）:
+- 城堡箭塔自动防御（350px射程，2s/箭，箭矢动画+音效）
+- 士兵攻城反馈（城堡前停止+攻击动画+碎石+音效）
+- 士兵受击闪白（150ms白色半透明叠加）
+- 城堡损毁四阶段（裂缝→缺口+大火→脉冲辉光+震屏）
+- 战线拉扯增强（交战带辉光+火星粒子+战鼓+激烈提示）
+- 战场环境音（持续风声底噪ambientGain，战线激烈时战鼓）
+
+**AP3→AP4 游戏深度层**（6/6 全部完成）:
+- 连杀播报6档（3/5/10/15/20/25，递增强度）
+- 翻盘时刻（劣势方反推>400px触发，全屏金色+战鼓，每方每局一次）
+- 盲盒系统（warChest 99钻随机出剑士35%/投石车30%/卫队20%/巨人10%/龙骑士5%，2s悬念→揭示）
+- 战场随机事件（40-60s间隔，援军到达/天降火雨/国王亲征）
+- 指挥官系统（每方伤害最高者金色光环+1.3×伤害，每 tick 重算）
+- 城堡防御升级（HP<40%→1.5s/箭8伤害，HP<20%→1s/箭12伤害）
+
+**口碑/体验优化**:
+- 画面文字感谢文化（礼物→"感谢XXX的「嘉年华」！召唤了岩石巨人"，点赞→"感谢XXX的点赞！⚔民兵前来助阵"）
+- 弹幕指令友好翻译（加红→"XXX加入了炎龙帝国！"，杀→"XXX号召民兵出击！"）
+- displayText 机制（douyin.js 可自定义任何弹幕的显示文字）
+- 普通聊天不显示在游戏画面（只有游戏指令相关文字上屏）
+
+**技术**:
+- OBS分辨率双档适配（设计分辨率1920×1080 + Canvas ctx.scale，改config.js即可切换）
+- 音效系统5个新槽位+2个环境音槽位
 
 ## failed_approaches
-- 正则批量迁移 logger 调用 → 模板字符串断裂，修了 15+ 处。以后逐文件改。
-- 可遇AI 协议第一版：用 `type` + `data.wrapper` → 实际用 `msgType` + 扁平 JSON
+
+- `sed` 批量编辑 index.html 删过头（删掉 `</style>` 等 HTML 标签）。以后用 Python 做复杂字符串替换。
+- 把 danmaku_text 提到命令判断之前 → 发送指令原文"1""杀"到画面 → 用户体验差。改成命令匹配时发友好翻译文字。
 
 ## next_steps
-1. 验证抖音弹幕是否显示在画面上（`[DANMAKU]` 日志确认数据到没到 gameEngine）
-2. 测试礼物价格阶梯映射是否正确
-3. 更新 `docs/项目进展.md` 标记 douyin 接入完成
+
+1. **直播实测** — 真实直播环境全流程测试（弹幕高峰压力、动态平衡、礼物转化、音效延迟）
+2. 兵种精灵图动画帧（idle/walk/attack/death 帧动画替代纯程序化）
+3. 段位系统可视化（头像框、勋章、进场公告）
+4. 主播话术指南
+5. 直播数据分析面板（弹幕量、礼物额、兵种使用率、平衡曲线）
 
 ## drift_warning
 ⚠️ 如果本文件超过 24 小时未更新，先 `git status` / `git diff` 再信它。
