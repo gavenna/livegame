@@ -27,6 +27,7 @@ class Battle {
     this.frontLine = 0;              // 向后兼容：三线均值
     this._laneRoundRobin = 0;         // 兵种 round-robin 分线计数器
     this.events = [];                // 本 tick 战斗事件
+    this._lastCastleShot = { red: 0, blue: 0 };  // 箭塔上次射击时间
   }
 
   /** 生成兵种 */
@@ -364,7 +365,36 @@ class Battle {
       }
     }
 
-    // === 5. 标记死亡兵种（保留播死亡动画） ===
+    // === 6. 城堡箭塔防御 ===
+    const castleCfg = config.CASTLE_DEFENSE;
+    const now6 = Date.now();
+    for (const team of ['red', 'blue']) {
+      if (now6 - this._lastCastleShot[team] < castleCfg.INTERVAL) continue;
+      const castleX = team === 'red' ? 90 : CANVAS_W - 90;
+      const enemies = aliveTroops.filter(t => t.team !== team && t.hp > 0);
+      let closest = null, closestDist = castleCfg.RANGE;
+      for (const e of enemies) {
+        const dist = Math.abs(e.x - castleX);
+        if (dist < closestDist) { closest = e; closestDist = dist; }
+      }
+      if (closest) {
+        closest.hp -= castleCfg.DAMAGE;
+        this._lastCastleShot[team] = now6;
+        this.events.push({
+          type: 'castle_arrow',
+          team,
+          targetId: closest.id,
+          targetX: closest.x,
+          targetY: closest.y,
+          targetLane: closest.lane,
+          damage: castleCfg.DAMAGE,
+          castleX,
+          time: now6,
+        });
+      }
+    }
+
+    // === 7. 标记死亡兵种（保留播死亡动画） ===
     let deadCount = 0;
     for (const t of this.troops) {
       if (t.animState === 'death') continue; // 已在死亡动画中

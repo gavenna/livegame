@@ -65,6 +65,9 @@ const dragonBreaths = [];
 /** B8: 龙吼冲击波 { x, y, lane, team, time } */
 const dragonRoars = [];
 
+/** B9: 城堡箭矢 { team, fromX, fromY, toX, toY, time, duration } */
+const castleArrows = [];
+
 /** C1: 事件播报 { text, time, color } */
 const eventBanners = [];
 
@@ -279,6 +282,14 @@ function processEvents(state) {
         dragonRoars.push({ x: evt.x, lane: evt.lane, team: evt.team, time: now });
         eventBanners.push({ text: '🦁 ' + (evt.ownerName || '龙骑士') + ' 发出恐惧咆哮！', time: now, color: '#FFD700' });
         break;
+      case 'castle_arrow':
+        // B9: 城堡箭矢
+        if (window.UI_POS && window.UI_POS.lanes) {
+          var fromY = window.UI_POS.lanes.Y[evt.targetLane || 1];
+          var toY = evt.targetY || fromY;
+          castleArrows.push({ team: evt.team, fromX: evt.castleX, fromY: fromY, toX: evt.targetX, toY: toY, time: now, duration: 400 });
+        }
+        break;
       // 抖音社交事件
       case 'like':
         dmText = `❤️ ${evt.playerName} 点赞！`;
@@ -347,6 +358,11 @@ function updateEffects() {
   // B8: 龙吼冲击波（1.2s）
   for (let i = dragonRoars.length - 1; i >= 0; i--) {
     if (now - dragonRoars[i].time > 1200) dragonRoars.splice(i, 1);
+  }
+
+  // B9: 城堡箭矢（0.4s）
+  for (let i = castleArrows.length - 1; i >= 0; i--) {
+    if (now - castleArrows[i].time > castleArrows[i].duration) castleArrows.splice(i, 1);
   }
 
   // C1: 事件播报（2s）
@@ -423,6 +439,9 @@ function renderBattle(ctx, state) {
 
   // 技能特效
   drawSkillEffects(ctx);
+
+  // 城堡箭矢
+  drawCastleArrows(ctx);
 
   // 攻城冲击
   drawSiegeImpacts(ctx, state);
@@ -871,6 +890,55 @@ function drawDragonBreaths(ctx) {
     ctx.lineTo(db.x, y + 25);
     ctx.closePath();
     ctx.fill();
+  }
+}
+
+/** B9: 城堡箭矢 — 红色/蓝色箭矢从城堡飞向目标 */
+function drawCastleArrows(ctx) {
+  var now = Date.now();
+  var arrowSpeed = 500; // px/s
+  for (var i = 0; i < castleArrows.length; i++) {
+    var ca = castleArrows[i];
+    var age = now - ca.time;
+    var progress = Math.min(1, age / ca.duration);
+    var ease = progress < 0.3 ? progress / 0.3 * 0.7 : 0.7 + (progress - 0.3) / 0.7 * 0.3; // fast then slow
+    var ax = ca.fromX + (ca.toX - ca.fromX) * ease;
+    var ay = ca.fromY + (ca.toY - ca.fromY) * ease;
+    var alpha = 1 - progress * 0.3;
+
+    // 箭杆
+    var angle = Math.atan2(ca.toY - ca.fromY, ca.toX - ca.fromX);
+    var shaftLen = 24;
+    ctx.strokeStyle = ca.team === 'red'
+      ? 'rgba(255,200,150,' + alpha.toFixed(2) + ')'
+      : 'rgba(150,200,255,' + alpha.toFixed(2) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - Math.cos(angle) * shaftLen, ay - Math.sin(angle) * shaftLen);
+    ctx.stroke();
+
+    // 箭头
+    var headSize = 6;
+    var hx = ax + Math.cos(angle) * headSize;
+    var hy = ay + Math.sin(angle) * headSize;
+    ctx.fillStyle = ca.team === 'red' ? 'rgba(255,120,80,' + alpha.toFixed(2) + ')' : 'rgba(80,160,255,' + alpha.toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(ax - Math.cos(angle + 0.6) * headSize, ay - Math.sin(angle + 0.6) * headSize);
+    ctx.lineTo(ax - Math.cos(angle - 0.6) * headSize, ay - Math.sin(angle - 0.6) * headSize);
+    ctx.closePath();
+    ctx.fill();
+
+    // 尾迹粒子
+    for (var p = 0; p < 3; p++) {
+      var px = ax - Math.cos(angle) * (shaftLen + p * 8 + Math.random() * 6);
+      var py = ay - Math.sin(angle) * (shaftLen + p * 8 + Math.random() * 6);
+      ctx.fillStyle = 'rgba(255,255,200,' + (alpha * 0.5).toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 

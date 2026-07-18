@@ -176,6 +176,10 @@ class GameEngine {
           this.pendingEvents.push(event);
           break;
         }
+        case 'castle_arrow': {
+          this.pendingEvents.push(event);
+          break;
+        }
       }
     }
 

@@ -48,6 +48,14 @@ module.exports = {
     MAX_TROOP_AGE: 60 * 1000,     // 兵种最大存活时间 60秒
   },
 
+  // === 城堡防御 ===
+  CASTLE_DEFENSE: {
+    RANGE: 350,                   // 箭塔射程 (px)，从城堡中心算
+    INTERVAL: 2000,               // 射击间隔 (ms)
+    DAMAGE: 5,                    // 每箭伤害
+    ARROW_SPEED: 500,             // 箭矢飞行速度 (px/s)，用于前端动画
+  },
+
   // === 三线战场 ===
   LANES: {
     COUNT: 3,
