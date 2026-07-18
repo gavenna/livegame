@@ -298,12 +298,10 @@ class GameEngine {
     if (!text) return;
     text = text.trim();
 
-    // 所有弹幕都推送到前端显示（指令类也不例外，否则观众看不到反馈）
-    this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
-
     const cmd = this.config.DANMAKU_COMMANDS[text];
     if (!cmd) {
       logger.info(`[DANMAKU] 弹幕: "${text}" (${playerName || playerId})`);
+      this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
       return;
     }
 
@@ -318,12 +316,13 @@ class GameEngine {
     switch (cmd) {
       case 'join_red':
         this.handleJoin('red', playerId, playerName);
+        this.pendingEvents.push({ type: 'danmaku_text', text: `${playerName || playerId} 加入了炎龙帝国！`, playerId, playerName, time: Date.now() });
         break;
       case 'join_blue':
         this.handleJoin('blue', playerId, playerName);
+        this.pendingEvents.push({ type: 'danmaku_text', text: `${playerName || playerId} 加入了霜狼联盟！`, playerId, playerName, time: Date.now() });
         break;
       case 'spawn_militia_3': {
-        // D2: 冷却检查
         if (this.isOnCooldown(playerId, cmd)) {
           logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
           return;
@@ -333,11 +332,11 @@ class GameEngine {
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
           this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
+          this.pendingEvents.push({ type: 'danmaku_text', text: `${playerName || playerId} 发起进攻！`, playerId, playerName, time: Date.now() });
         }
         break;
       }
       case 'speed_boost': {
-        // D2: 冷却检查
         if (this.isOnCooldown(playerId, cmd)) {
           logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
           return;
