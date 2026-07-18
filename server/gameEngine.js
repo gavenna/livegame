@@ -301,7 +301,6 @@ class GameEngine {
     const cmd = this.config.DANMAKU_COMMANDS[text];
     if (!cmd) {
       logger.info(`[DANMAKU] 弹幕: "${text}" (${playerName || playerId})`);
-      this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
       return;
     }
 
