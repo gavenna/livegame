@@ -9,7 +9,8 @@
 
 const FPS = 30;
 const FRAME_MS = 1000 / FPS;
-const W = 1920, H = 1080;
+const DESIGN_W = 1920, DESIGN_H = 1080;
+let canvasScaleX = 1, canvasScaleY = 1;
 
 // 三线战场常量（与 server/config.js LANES 同步）
 var LANE_Y = [390, 575, 760];
@@ -24,6 +25,13 @@ const danmakuCanvas = document.getElementById('danmaku-layer');
 const battleCtx = battleCanvas.getContext('2d');
 const uiCtx = uiCanvas.getContext('2d');
 const danmakuCtx = danmakuCanvas.getContext('2d');
+
+// 默认画布尺寸（首帧前使用，WS 连接后由 initCanvas 更新）
+battleCanvas.width = DESIGN_W; battleCanvas.height = DESIGN_H;
+uiCanvas.width = DESIGN_W; uiCanvas.height = DESIGN_H;
+danmakuCanvas.width = DESIGN_W; danmakuCanvas.height = DESIGN_H;
+var container = document.getElementById('game-container');
+if (container) { container.style.width = DESIGN_W + 'px'; container.style.height = DESIGN_H + 'px'; }
 
 let lastFrameTime = 0;
 let frameCount = 0;
@@ -69,8 +77,8 @@ const PARTICLE_COUNT = 40;
 function initParticles() {
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     particles.push({
-      x: Math.random() * W,
-      y: H * 0.5 + Math.random() * H * 0.4,
+      x: Math.random() * DESIGN_W,
+      y: DESIGN_H * 0.5 + Math.random() * DESIGN_H * 0.4,
       size: 1 + Math.random() * 3,
       speed: 0.2 + Math.random() * 0.8,
       alpha: 0.15 + Math.random() * 0.3,
@@ -93,6 +101,26 @@ const wrathImg = new Image();
 wrathImg.src = '/assets/sprites/wrathOfGod_effect.png';
 const siegeImg = new Image();
 siegeImg.src = '/assets/sprites/siege_impact.png';
+
+/**
+ * 初始化画布分辨率
+ */
+function initCanvas(cfg) {
+  canvasScaleX = cfg.width / DESIGN_W;
+  canvasScaleY = cfg.height / DESIGN_H;
+  [battleCanvas, uiCanvas, danmakuCanvas].forEach(function(c) {
+    c.width = cfg.width;
+    c.height = cfg.height;
+  });
+  var container = document.getElementById('game-container');
+  if (container) {
+    container.style.width = cfg.width + 'px';
+    container.style.height = cfg.height + 'px';
+  }
+  console.log('[Renderer] Canvas ' + cfg.width + 'x' + cfg.height +
+    ' scale=' + canvasScaleX.toFixed(3) + 'x' + canvasScaleY.toFixed(3));
+}
+window.initCanvas = initCanvas;
 
 /**
  * 主渲染循环
@@ -133,10 +161,20 @@ function gameLoop(timestamp) {
   // 更新特效
   updateEffects();
 
-  // 渲染三层
+  // 渲染三层（应用分辨率缩放）
+  battleCtx.save(); battleCtx.scale(canvasScaleX, canvasScaleY);
   renderBattle(battleCtx, state);
-  if (window.renderUI) window.renderUI(uiCtx, state);
+  battleCtx.restore();
+
+  if (window.renderUI) {
+    uiCtx.save(); uiCtx.scale(canvasScaleX, canvasScaleY);
+    window.renderUI(uiCtx, state);
+    uiCtx.restore();
+  }
+
+  danmakuCtx.save(); danmakuCtx.scale(canvasScaleX, canvasScaleY);
   renderDanmaku(danmakuCtx, state);
+  danmakuCtx.restore();
 
   } catch (e) { console.error('[gameLoop] 渲染崩溃:', e.message, e.stack); }
 }
@@ -193,8 +231,8 @@ function processEvents(state) {
           if (deadTroop) {
             killFlashes.push({ x: deadTroop.x, y: deadTroop.y, time: now });
           } else {
-            const killX = evt.team === 'red' ? W * 0.4 : W * 0.6;
-            killFlashes.push({ x: killX, y: H * 0.5 + Math.random() * 100, time: now });
+            const killX = evt.team === 'red' ? DESIGN_W * 0.4 : DESIGN_W * 0.6;
+            killFlashes.push({ x: killX, y: DESIGN_H * 0.5 + Math.random() * 100, time: now });
           }
         }
         // C2: 连杀追踪
@@ -254,12 +292,12 @@ function processEvents(state) {
         break;
       case 'expire':
         // B4: 死亡动画
-        deathAnims.push({ x: W / 2 + (Math.random() - 0.5) * 400, y: H * 0.5 + Math.random() * 200, key: evt.key, time: now });
+        deathAnims.push({ x: DESIGN_W / 2 + (Math.random() - 0.5) * 400, y: DESIGN_H * 0.5 + Math.random() * 200, key: evt.key, time: now });
         if (window.audioEngine) window.audioEngine.playDeath();
         break;
     }
     if (dmText) {
-      danmakuQueue.push({ text: dmText, time: now, y: H - 50 });
+      danmakuQueue.push({ text: dmText, time: now, y: DESIGN_H - 50 });
     }
   }
 }
@@ -321,14 +359,14 @@ function updateEffects() {
     p.y -= p.speed;
     p.wobble += 0.02;
     p.x += Math.sin(p.wobble) * 0.3;
-    if (p.y < H * 0.4) { p.y = H * 0.75 + Math.random() * H * 0.2; p.x = Math.random() * W; }
+    if (p.y < DESIGN_H * 0.4) { p.y = DESIGN_H * 0.75 + Math.random() * DESIGN_H * 0.2; p.x = Math.random() * DESIGN_W; }
   }
 }
 
 // === 战场层渲染 ===
 
 function renderBattle(ctx, state) {
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, DESIGN_W, DESIGN_H);
 
   drawBackground(ctx);
 
@@ -404,7 +442,7 @@ function drawFrontLine(ctx, frontLines, state) {
   for (var li = 0; li < 3; li++) {
     var frontLine = frontLines[li] || 0;
     var lineH = laneY[li];
-  var centerX = W / 2 + frontLine * 0.5;
+  var centerX = DESIGN_W / 2 + frontLine * 0.5;
   const absFL = Math.abs(frontLine);
 
   // 线宽随战线偏移增大
@@ -447,10 +485,10 @@ function drawFrontLine(ctx, frontLines, state) {
   ctx.textAlign = 'center';
   if (avgFL > 300) {
     ctx.fillStyle = 'rgba(255,150,150,0.8)';
-    ctx.fillText('→ 红方推进中', W / 2, 85);
+    ctx.fillText('→ 红方推进中', DESIGN_W / 2, 85);
   } else if (avgFL < -300) {
     ctx.fillStyle = 'rgba(150,150,255,0.8)';
-    ctx.fillText('← 蓝方推进中', W / 2, 85);
+    ctx.fillText('← 蓝方推进中', DESIGN_W / 2, 85);
   }
 }
 
@@ -473,25 +511,25 @@ function drawLaneBackgrounds(ctx, state) {
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.03)';
     }
-    ctx.fillRect(0, y - 45, W, 90);
+    ctx.fillRect(0, y - 45, DESIGN_W, 90);
 
     // 车道分隔线
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, y - 45);
-    ctx.lineTo(W, y - 45);
+    ctx.lineTo(DESIGN_W, y - 45);
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(0, y + 45);
-    ctx.lineTo(W, y + 45);
+    ctx.lineTo(DESIGN_W, y + 45);
     ctx.stroke();
 
     // 线名标签
     ctx.font = '15px Microsoft YaHei, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.textAlign = 'center';
-    ctx.fillText(laneNames[i], W / 2, y + 5);
+    ctx.fillText(laneNames[i], DESIGN_W / 2, y + 5);
   }
 
   // 城门标记
@@ -516,17 +554,17 @@ function drawLaneBackgrounds(ctx, state) {
 /** 战场背景 */
 function drawBackground(ctx) {
   if (bgImage.complete && bgImage.naturalWidth > 0) {
-    ctx.drawImage(bgImage, 0, 0, W, H);
+    ctx.drawImage(bgImage, 0, 0, DESIGN_W, DESIGN_H);
     return;
   }
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  const grad = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
   grad.addColorStop(0, '#1a1a2e');
   grad.addColorStop(0.3, '#2d2d44');
   grad.addColorStop(1, '#3d2b1f');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
   ctx.fillStyle = '#2d5a1e';
-  ctx.fillRect(0, H * 0.75, W, H * 0.25);
+  ctx.fillRect(0, DESIGN_H * 0.75, DESIGN_W, DESIGN_H * 0.25);
 }
 
 /** 城堡（含 E2 受损表现） */
@@ -539,7 +577,7 @@ function drawCastles(ctx, state) {
   const bluePct = blueHP / maxHP;
 
   // 红方城堡（左）— 图片
-  const ri = P ? P.redImg : { x: 10, y: H * 0.38, w: 160, h: 140 };
+  const ri = P ? P.redImg : { x: 10, y: DESIGN_H * 0.38, w: 160, h: 140 };
   const rcx = ri.x + ri.w / 2;  // 红方城堡中心 X
   const rcy = ri.y + ri.h / 2;
 
@@ -550,11 +588,11 @@ function drawCastles(ctx, state) {
     drawCastleDamageOverlay(ctx, rcx, rcy, redPct, 'red');
   } else {
     ctx.fillStyle = '#8B4513';
-    ctx.fillRect(ri.x + 10, H * 0.5, 60, 120);
+    ctx.fillRect(ri.x + 10, DESIGN_H * 0.5, 60, 120);
   }
 
   // 红方 HP 条（battle 层小血条）
-  const rhp = P ? P.hpBar : { redX: 20, y: H * 0.48, w: 100, h: 8 };
+  const rhp = P ? P.hpBar : { redX: 20, y: DESIGN_H * 0.48, w: 100, h: 8 };
   const rhpCX = rhp.redX + rhp.w / 2;
   ctx.fillStyle = '#333';
   ctx.fillRect(rhp.redX, rhp.y, rhp.w, rhp.h);
@@ -562,7 +600,7 @@ function drawCastles(ctx, state) {
   ctx.fillRect(rhp.redX, rhp.y, rhp.w * redPct, rhp.h);
 
   // 红方名字
-  const rnY = P && P.nameY ? P.nameY.red : H * 0.46;
+  const rnY = P && P.nameY ? P.nameY.red : DESIGN_H * 0.46;
   ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
   ctx.fillStyle = '#FF8888';
   ctx.textAlign = 'center';
@@ -573,7 +611,7 @@ function drawCastles(ctx, state) {
   ctx.fillText(Math.round(redHP) + ' HP', rhpCX, rhp.y + rhp.h + 28);
 
   // 蓝方城堡（右）— 图片
-  const bi = P ? P.blueImg : { x: W - 170, y: H * 0.38, w: 160, h: 140 };
+  const bi = P ? P.blueImg : { x: DESIGN_W - 170, y: DESIGN_H * 0.38, w: 160, h: 140 };
   const bcx = bi.x + bi.w / 2;
   const bcy = bi.y + bi.h / 2;
 
@@ -584,14 +622,14 @@ function drawCastles(ctx, state) {
     drawCastleDamageOverlay(ctx, bcx, bcy, bluePct, 'blue');
   } else {
     ctx.fillStyle = '#4A4A6A';
-    ctx.fillRect(bi.x + 10, H * 0.5, 60, 120);
+    ctx.fillRect(bi.x + 10, DESIGN_H * 0.5, 60, 120);
   }
 
   // 蓝方 HP 条（battle 层小血条）
   const bhp = P ? {
     x: P.hpBar.blueRightX - P.hpBar.w,
     y: P.hpBar.y, w: P.hpBar.w, h: P.hpBar.h
-  } : { x: W - 120, y: H * 0.48, w: 100, h: 8 };
+  } : { x: DESIGN_W - 120, y: DESIGN_H * 0.48, w: 100, h: 8 };
   const bhpCX = bhp.x + bhp.w / 2;
   ctx.fillStyle = '#333';
   ctx.fillRect(bhp.x, bhp.y, bhp.w, bhp.h);
@@ -599,7 +637,7 @@ function drawCastles(ctx, state) {
   ctx.fillRect(bhp.x, bhp.y, bhp.w * bluePct, bhp.h);
 
   // 蓝方名字
-  const bnY = P && P.nameY ? P.nameY.blue : H * 0.46;
+  const bnY = P && P.nameY ? P.nameY.blue : DESIGN_H * 0.46;
   ctx.font = 'bold 16px Microsoft YaHei, sans-serif';
   ctx.fillStyle = '#8888FF';
   ctx.fillText('霜狼联盟', bhpCX, bnY);
@@ -714,18 +752,18 @@ function drawSkillEffects(ctx) {
       if (progress < 0.3) {
         const alpha = (1 - progress / 0.3) * 0.4;
         ctx.fillStyle = `rgba(255,215,0,${alpha})`;
-        ctx.fillRect(0, 0, W, H);
+        ctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
       }
       // 金色光柱
       if (progress < 0.6) {
         const colAlpha = (1 - progress / 0.6) * 0.5;
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        const grad = ctx.createLinearGradient(0, 0, 0, DESIGN_H);
         grad.addColorStop(0, `rgba(255,215,0,0)`);
         grad.addColorStop(0.3, `rgba(255,215,0,${colAlpha})`);
         grad.addColorStop(0.7, `rgba(255,200,0,${colAlpha})`);
         grad.addColorStop(1, `rgba(255,180,0,0)`);
         ctx.fillStyle = grad;
-        ctx.fillRect(W / 2 - 80, 0, 160, H);
+        ctx.fillRect(DESIGN_W / 2 - 80, 0, 160, DESIGN_H);
       }
     }
 
@@ -736,7 +774,7 @@ function drawSkillEffects(ctx) {
         ctx.strokeStyle = `rgba(255,80,20,${alpha})`;
         ctx.lineWidth = 2;
         for (let i = 0; i < 12; i++) {
-          const arrowX = (i / 12) * W + (progress * 800) % 200 - 100;
+          const arrowX = (i / 12) * DESIGN_W + (progress * 800) % 200 - 100;
           const arrowY = 80 + i * 30 + progress * 300;
           ctx.beginPath();
           ctx.moveTo(arrowX, arrowY);
@@ -766,8 +804,8 @@ function drawSiegeImpacts(ctx, state) {
     const shakeX = progress < 0.3 ? Math.sin(progress * 50) * 8 * (1 - progress / 0.3) : 0;
 
     // 冲击环
-    const cx = si.target === 'red' ? 90 : W - 90;
-    const cy = H * 0.45;
+    const cx = si.target === 'red' ? 90 : DESIGN_W - 90;
+    const cy = DESIGN_H * 0.45;
     const radius = 30 + progress * 150;
     ctx.strokeStyle = `rgba(255,140,0,${alpha})`;
     ctx.lineWidth = 4 * (1 - progress);
@@ -878,7 +916,7 @@ function drawParticles(ctx) {
 // === 弹幕层 ===
 
 function renderDanmaku(ctx, state) {
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, DESIGN_W, DESIGN_H);
 
   const now = Date.now();
 
@@ -888,7 +926,7 @@ function renderDanmaku(ctx, state) {
   }
 
   // C6: 三轨弹幕布局
-  const POS = window.UI_POS || { danmaku: { tracks: [H - 60, H - 110, H - 160], maxVisible: 6, lifetime: 3000 } };
+  const POS = window.UI_POS || { danmaku: { tracks: [DESIGN_H - 60, DESIGN_H - 110, DESIGN_H - 160], maxVisible: 6, lifetime: 3000 } };
   const tracks = POS.danmaku.tracks;
   const trackUsed = tracks.map(() => false);
 
@@ -914,13 +952,13 @@ function renderDanmaku(ctx, state) {
     // 半透明底条
     const textWidth = ctx.measureText(dm.text).width;
     ctx.fillStyle = `rgba(0,0,0,${alpha * 0.5})`;
-    ctx.fillRect(W / 2 - textWidth / 2 - 12, y - 16, textWidth + 24, 26);
+    ctx.fillRect(DESIGN_W / 2 - textWidth / 2 - 12, y - 16, textWidth + 24, 26);
 
     ctx.fillStyle = `rgba(255,255,255,${alpha})`;
     ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.7})`;
     ctx.lineWidth = 3;
-    ctx.strokeText(dm.text, W / 2, y);
-    ctx.fillText(dm.text, W / 2, y);
+    ctx.strokeText(dm.text, DESIGN_W / 2, y);
+    ctx.fillText(dm.text, DESIGN_W / 2, y);
   }
 
   // C1: 事件播报（中央顶部大字）
@@ -939,8 +977,8 @@ function renderDanmaku(ctx, state) {
     ctx.fillStyle = hexToRgba(banner.color, hexAlpha);
     ctx.strokeStyle = `rgba(0,0,0,${alpha * 0.8})`;
     ctx.lineWidth = 3;
-    ctx.strokeText(banner.text, W / 2, bannerY);
-    ctx.fillText(banner.text, W / 2, bannerY);
+    ctx.strokeText(banner.text, DESIGN_W / 2, bannerY);
+    ctx.fillText(banner.text, DESIGN_W / 2, bannerY);
   }
 }
 

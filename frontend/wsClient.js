@@ -14,6 +14,9 @@ let gameState = null;
 /** @type {Function|null} 状态更新回调 */
 let onStateUpdate = null;
 
+/** 是否已初始化画布分辨率 */
+let canvasInited = false;
+
 function connect() {
   if (ws && ws.readyState === WebSocket.OPEN) return;
 
@@ -32,6 +35,10 @@ function connect() {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === 'game_state') {
+        if (!canvasInited && msg.canvas && window.initCanvas) {
+          window.initCanvas(msg.canvas);
+          canvasInited = true;
+        }
         gameState = msg;
         window.gameState = msg; // 让 renderer 也能读到
         document.getElementById('status').textContent =

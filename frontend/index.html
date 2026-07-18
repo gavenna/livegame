@@ -24,8 +24,6 @@
   }
   #game-container {
     position: relative;
-    width: 1920px;
-    height: 1080px;
     transform-origin: top left;
   }
   canvas {
@@ -125,22 +123,14 @@
     text-align: center;
   }
   #panel .state-line span { color: #aaa; }
-
-  /* 缩放适配 */
-  @media (max-width: 2200px) {
-    #game-container { transform: scale(0.55); margin-bottom: -490px; }
-  }
-  @media (max-width: 1600px) {
-    #game-container { transform: scale(0.4); margin-bottom: -650px; }
-  }
 </style>
 </head>
 <body>
 <div id="wrapper">
   <div id="game-container">
-    <canvas id="battle-layer" width="1920" height="1080"></canvas>
-    <canvas id="ui-layer" width="1920" height="1080"></canvas>
-    <canvas id="danmaku-layer" width="1920" height="1080"></canvas>
+    <canvas id="battle-layer"></canvas>
+    <canvas id="ui-layer"></canvas>
+    <canvas id="danmaku-layer"></canvas>
     <div id="status">⚔ 等待连接...</div>
   </div>
 

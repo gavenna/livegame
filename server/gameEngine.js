@@ -542,6 +542,10 @@ class GameEngine {
       phaseTotal,
       maxHP: this.config.CASTLE_HP,
       devMode: this.config.DEV_MODE,
+      canvas: {
+        width: this.config.CANVAS_WIDTH,
+        height: this.config.CANVAS_HEIGHT,
+      },
     };
 
     if (this.state === STATE.PLAYING || this.state === STATE.ROUND_END) {
