@@ -356,6 +356,16 @@ function processEvents(state) {
         eventBanners.push({ text: evt.text, time: now, color: '#FFD700' });
         if (window.audioEngine) window.audioEngine.playWarDrum();
         break;
+      case 'chest_open':
+        // 盲盒悬念 — 宝箱抖动
+        eventBanners.push({ text: '📦 ' + evt.text, time: now, color: '#DAA520' });
+        if (window.audioEngine) window.audioEngine.playSpawn();
+        break;
+      case 'chest_reveal':
+        // 盲盒揭示 — 金光大字
+        eventBanners.push({ text: '🎁 ' + evt.text, time: now, color: '#FFD700' });
+        if (window.audioEngine) window.audioEngine.playWrathOfGod();
+        break;
       // 抖音社交事件
       case 'like':
         dmText = `❤️ ${evt.playerName} 点赞！`;

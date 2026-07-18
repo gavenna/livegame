@@ -186,7 +186,9 @@ class GameEngine {
         }
         case 'castle_hit':
         case 'soldier_attack_castle':
-        case 'comeback': {
+        case 'comeback':
+        case 'chest_open':
+        case 'chest_reveal': {
           this.pendingEvents.push(event);
           break;
         }
@@ -414,11 +416,33 @@ class GameEngine {
     let actualKey = this.config.DOUYIN_GIFT_MAP[troopKey] || troopKey;
     const troopDef = this.config.TROOPS[actualKey];
     const troopName = troopDef ? troopDef.name : actualKey;
-    const isPremium = troopDef && troopDef.cost >= 99 && !troopDef.globalSkill && !troopDef.siege;
+    const isChest = troopDef && troopDef.random;  // 盲盒
+    const isPremium = troopDef && troopDef.cost >= 99 && !troopDef.globalSkill && !troopDef.siege && !isChest;
     const name = playerName || playerId;
     const thanks = giftName ? `感谢 ${name} 的「${giftName}」！` : '';
 
-    if (isPremium) {
+    if (isChest) {
+      // 盲盒：2s 悬念 → 揭示
+      const chestText = thanks
+        ? `${thanks} 开启战争宝箱…`
+        : `${name} 开启战争宝箱…`;
+      this.pendingEvents.push({ type: 'chest_open', team, playerId, playerName, text: chestText, time: Date.now() });
+      logger.info(`[GIFT] ${name} 开启战争宝箱`);
+      setTimeout(() => {
+        const chestTroop = this.battle.spawnTroop(team, 'warChest', playerId, playerName);
+        if (chestTroop) {
+          const revealedName = this.config.TROOPS[chestTroop.key]
+            ? this.config.TROOPS[chestTroop.key].name : chestTroop.key;
+          this.pendingEvents.push({
+            type: 'chest_reveal', team, key: chestTroop.key, playerId, playerName,
+            text: `${name} 的战争宝箱开出 ${revealedName}！！`, time: Date.now(),
+          });
+          const giftScore = chestTroop.damage * this.config.SCORE.GIFT_MULTIPLIER;
+          this.addStat('gifts', playerId, giftScore);
+          logger.info(`[GIFT] ${name} 盲盒开出 ${chestTroop.key} → ${team}方`);
+        }
+      }, 2000);
+    } else if (isPremium) {
       const previewText = thanks
         ? `${thanks} 正在召唤 ${troopName}…`
         : `${name} 正在召唤 ${troopName}…`;
