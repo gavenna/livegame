@@ -251,7 +251,10 @@ function processEvents(state) {
         }
         // B1: 伤害数字
         damageNumbers.push({ x: killFlashes[killFlashes.length - 1].x, y: killFlashes[killFlashes.length - 1].y - 20, value: '💀', color: '#FF4444', time: now });
-        if (window.audioEngine) window.audioEngine.playKill();
+        if (window.audioEngine) {
+          window.audioEngine.playKill();
+          window.audioEngine.playSwordClang();
+        }
         break;
       case 'global_skill':
         dmText = `🔥 ${evt.ownerName} 释放了 ${evt.key === 'wrathOfGod' ? '天神之怒' : '火矢齐射'}！`;
@@ -292,14 +295,20 @@ function processEvents(state) {
           var toY = evt.targetY || fromY;
           castleArrows.push({ team: evt.team, fromX: evt.castleX, fromY: fromY, toX: evt.targetX, toY: toY, time: now, duration: 400 });
         }
+        if (window.audioEngine) {
+          window.audioEngine.playCastleArrow();
+          setTimeout(function() { if (window.audioEngine) window.audioEngine.playArrowHit(); }, 350);
+        }
         break;
       case 'castle_hit':
         // B10: 战线攻城碎石（城堡中心爆发）
         castleDebris.push({ target: evt.target, lane: evt.lane, time: now, x: null, y: null });
+        if (window.audioEngine) window.audioEngine.playCastleHit();
         break;
       case 'soldier_attack_castle':
         // B10: 单兵攻城碎石（士兵位置小爆发）
         castleDebris.push({ target: evt.team === 'red' ? 'blue' : 'red', lane: evt.lane, time: now, x: evt.x, y: evt.y });
+        if (window.audioEngine) window.audioEngine.playCastleHit();
         break;
       // 抖音社交事件
       case 'like':

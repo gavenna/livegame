@@ -25,6 +25,11 @@
     countdownTick:'assets/audio/sfx_countdown.wav',
     victory:      'assets/audio/sfx_victory.wav',
     defeat:       'assets/audio/sfx_defeat.wav',
+    swordClang:   'assets/audio/sfx_sword_clang.wav',   // 近战交兵
+    arrowWhoosh:  'assets/audio/sfx_arrow_whoosh.wav',  // 箭矢破空
+    arrowHit:     'assets/audio/sfx_arrow_hit.wav',     // 箭矢命中
+    castleArrow:  'assets/audio/sfx_castle_arrow.wav',  // 箭塔射击
+    castleHit:    'assets/audio/sfx_castle_hit.wav',    // 攻城碎石
   };
 
   // 兵种攻击音效（不同兵种不同声音）
@@ -310,6 +315,9 @@
 
   AudioEngine.prototype.playSwordClang = function()   { this._playSFX('swordClang'); };
   AudioEngine.prototype.playArrowWhoosh = function()  { this._playSFX('arrowWhoosh'); };
+  AudioEngine.prototype.playArrowHit = function()     { this._playSFX('arrowHit'); };
+  AudioEngine.prototype.playCastleArrow = function()  { this._playSFX('castleArrow'); };
+  AudioEngine.prototype.playCastleHit = function()    { this._playSFX('castleHit'); };
   AudioEngine.prototype.playUnitAttack = function(key) {
     if (!key) return;
     var path = UNIT_ATK_MAP[key];
