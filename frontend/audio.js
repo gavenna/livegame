@@ -30,6 +30,8 @@
     arrowHit:     'assets/audio/sfx_arrow_hit.wav',     // 箭矢命中
     castleArrow:  'assets/audio/sfx_castle_arrow.wav',  // 箭塔射击
     castleHit:    'assets/audio/sfx_castle_hit.wav',    // 攻城碎石
+    battleAmbient:'assets/audio/sfx_battle_ambient.mp3',// 战场风声
+    warDrum:      'assets/audio/sfx_war_drum.wav',      // 军队战鼓
   };
 
   // 兵种攻击音效（不同兵种不同声音）
@@ -75,6 +77,10 @@
     this.sfxGain.gain.value = 0.8;
     this.sfxGain.connect(this.masterGain);
 
+    this.ambientGain = this.ctx.createGain();
+    this.ambientGain.gain.value = 0.15;  // 环境音较低
+    this.ambientGain.connect(this.masterGain);
+
     // 状态
     this._muted = false;
     this._bgmState = '';
@@ -82,6 +88,7 @@
     this._loaded = false;      // loadAll() 完成标记
     this._bgmSource = null;    // 当前 BGM sourceNode
     this._bgmFadeTimer = null; // BGM 淡出定时器
+    this._ambientSource = null;// 环境音 sourceNode
     this._lastKillTime = 0;
     this._loadPromise = null;
   };
@@ -263,6 +270,46 @@
     }, 300);
 
     this._bgmSource = null;
+  };
+
+  // ============================================================
+  //  环境音（战场风声，循环播放）
+  // ============================================================
+
+  AudioEngine.prototype.playBattleAmbient = function() {
+    if (!this._loaded || !this._ok() || this._ambientSource) return;
+    var path = SFX_MAP['battleAmbient'];
+    var buf = this._buffers[path];
+    if (!buf) return;
+    var ctx = this.ctx;
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.loopStart = 0;
+    src.loopEnd = buf.duration;
+    src.connect(this.ambientGain);
+    src.start();
+    this._ambientSource = src;
+    console.log('[Audio] Ambient started');
+  };
+
+  AudioEngine.prototype.stopBattleAmbient = function() {
+    if (!this._ambientSource) return;
+    var ctx = this.ctx;
+    var src = this._ambientSource;
+    var now = ctx.currentTime;
+    // 淡出
+    this.ambientGain.gain.cancelScheduledValues(now);
+    this.ambientGain.gain.setValueAtTime(this.ambientGain.gain.value, now);
+    this.ambientGain.gain.linearRampToValueAtTime(0, now + 0.5);
+    try { src.stop(now + 0.6); } catch (e) {}
+    setTimeout(function() { try { src.disconnect(); } catch (e) {} }, 700);
+    this._ambientSource = null;
+    console.log('[Audio] Ambient stopped');
+  };
+
+  AudioEngine.prototype.playWarDrum = function() {
+    this._playSFX('warDrum', 0.6);
   };
 
   // ============================================================

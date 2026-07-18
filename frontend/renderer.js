@@ -145,11 +145,17 @@ function gameLoop(timestamp) {
   // 处理事件 → 分发到各特效系统
   processEvents(state);
 
-  // BGM 状态跟踪 + 胜利/战败音效
+  // BGM 状态跟踪 + 环境音 + 胜利/战败音效
   if (window.audioEngine) {
     var currentState = state.state || 'WAITING';
     if (currentState !== lastAudioState) {
       window.audioEngine.setBGMState(currentState);
+      // 环境音：COUNTDOWN 开始播放，ROUND_END 停止
+      if (currentState === 'COUNTDOWN') {
+        window.audioEngine.playBattleAmbient();
+      } else if (currentState === 'ROUND_END') {
+        window.audioEngine.stopBattleAmbient();
+      }
       // 进入结算时播放胜利/战败
       if (currentState === 'ROUND_END') {
         var redHP = state.red ? state.red.castleHP : 0;
@@ -166,6 +172,17 @@ function gameLoop(timestamp) {
 
   // 更新特效
   updateEffects();
+
+  // 战鼓：战线激烈时周期性播放
+  if (window.audioEngine && state.state === 'PLAYING') {
+    var frontLines = state.frontLines || [0, 0, 0];
+    var maxPush = Math.max.apply(null, frontLines.map(function(f) { return Math.abs(f); }));
+    if (maxPush > 500 && !window.__drumThrottle) {
+      window.audioEngine.playWarDrum();
+      window.__drumThrottle = true;
+      setTimeout(function() { window.__drumThrottle = false; }, 4000);
+    }
+  }
 
   // 震屏：城堡 <10% 时画面微震
   var redPct = state.red ? state.red.castleHP / (state.maxHP || 10000) : 1;
