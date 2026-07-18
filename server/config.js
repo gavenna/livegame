@@ -112,9 +112,11 @@ module.exports = {
   DANMAKU_COMMANDS: {
     '1': 'join_red',
     '红': 'join_red',
+    '加红': 'join_red',
     '炎龙': 'join_red',
     '2': 'join_blue',
     '蓝': 'join_blue',
+    '加蓝': 'join_blue',
     '霜狼': 'join_blue',
     '杀': 'spawn_militia_3',
     '666': 'spawn_militia_3',
