@@ -496,62 +496,104 @@ function renderBattle(ctx, state) {
   drawParticles(ctx);
 }
 
-/** B7: 战线可视化 */
+/** B7: 战线可视化 — 交战带 + 火星粒子 + 推进标签 */
+var _sparkPool = []; // 火星粒子池 { x, y, life, maxLife }
 function drawFrontLine(ctx, frontLines, state) {
   if (typeof frontLines === 'number') { frontLines = [frontLines, frontLines, frontLines]; }
   if (!frontLines) { frontLines = [0, 0, 0]; }
   var laneY = (window.UI_POS && window.UI_POS.lanes) ? window.UI_POS.lanes.Y : LANE_Y;
+  var now = Date.now();
+
+  // 清理过期火星
+  _sparkPool = _sparkPool.filter(function(s) { return s.life > 0; });
 
   for (var li = 0; li < 3; li++) {
     var frontLine = frontLines[li] || 0;
     var lineH = laneY[li];
-  var centerX = DESIGN_W / 2 + frontLine * 0.5;
-  const absFL = Math.abs(frontLine);
+    var centerX = DESIGN_W / 2 + frontLine * 0.5;
+    var absFL = Math.abs(frontLine);
+    var ratio = Math.min(1, absFL / 500);
+    var isRed = frontLine > 0;
+    var r, g, b;
 
-  // 线宽随战线偏移增大
-  const lineWidth = 2 + Math.min(6, absFL / 150);
-  ctx.lineWidth = lineWidth;
-  ctx.setLineDash([12, 8]);
+    if (isRed) {
+      r = Math.round(68 + ratio * 187); g = Math.round(68 - ratio * 24); b = Math.round(68 - ratio * 24);
+    } else if (frontLine < 0) {
+      r = Math.round(68 - ratio * 24); g = Math.round(68 - ratio * 24); b = Math.round(68 + ratio * 187);
+    } else {
+      r = 255; g = 255; b = 255;
+    }
 
-  // 颜色从灰→红/蓝
-  const ratio = Math.min(1, absFL / 500);
-  if (frontLine > 0) {
-    ctx.strokeStyle = `rgba(${Math.round(68 + ratio * 187)}, ${Math.round(68 - ratio * 24)}, ${Math.round(68 - ratio * 24)}, ${0.6 + ratio * 0.4})`;
-  } else if (frontLine < 0) {
-    ctx.strokeStyle = `rgba(${Math.round(68 - ratio * 24)}, ${Math.round(68 - ratio * 24)}, ${Math.round(68 + ratio * 187)}, ${0.6 + ratio * 0.4})`;
-  } else {
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  }
+    // === 交战带辉光 — 半透明渐亮区 ===
+    var glowAlpha = (0.05 + ratio * 0.15).toFixed(2);
+    var glowW = 30 + ratio * 60;
+    var grad = ctx.createLinearGradient(centerX - glowW, 0, centerX + glowW, 0);
+    grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+    grad.addColorStop(0.5, 'rgba(' + r + ',' + g + ',' + b + ',' + glowAlpha + ')');
+    grad.addColorStop(1, 'rgba(' + r + ',' + g + ',' + b + ',0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(centerX - glowW, lineH - 40, glowW * 2, 80);
 
-  ctx.beginPath();
-  ctx.moveTo(centerX, lineH - 35);
-  ctx.lineTo(centerX, lineH + 35);
-  ctx.stroke();
-  ctx.setLineDash([]);
+    // === 主战线 — 加粗虚线 ===
+    var lineWidth = 2 + Math.min(8, absFL / 100);
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash([14, 6]);
+    ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.8 + ratio * 0.2).toFixed(2) + ')';
+    ctx.beginPath();
+    ctx.moveTo(centerX, lineH - 38);
+    ctx.lineTo(centerX, lineH + 38);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-  // 战线到城堡时闪烁
-  if (state.state === 'PLAYING' && absFL >= 800) {
-    if (Math.sin(Date.now() * 0.01) > 0) {
-      ctx.strokeStyle = frontLine > 0 ? 'rgba(255,50,50,0.8)' : 'rgba(50,50,255,0.8)';
-      ctx.lineWidth = lineWidth + 3;
+    // === 战线到城堡警报 ===
+    if (state.state === 'PLAYING' && absFL >= 800) {
+      var blinkAlpha = Math.sin(now * 0.015) > 0 ? 0.9 : 0.2;
+      ctx.strokeStyle = isRed ? 'rgba(255,50,50,' + blinkAlpha + ')' : 'rgba(50,50,255,' + blinkAlpha + ')';
+      ctx.lineWidth = lineWidth + 4;
       ctx.beginPath();
-      ctx.moveTo(centerX, lineH - 35);
-      ctx.lineTo(centerX, lineH + 35);
+      ctx.moveTo(centerX, lineH - 42);
+      ctx.lineTo(centerX, lineH + 42);
       ctx.stroke();
     }
-  }
+
+    // === 火星粒子 — 交战激烈处飞溅 ===
+    if (absFL > 50 && Math.random() < 0.4 + ratio * 0.4) {
+      _sparkPool.push({
+        x: centerX + (Math.random() - 0.5) * 40,
+        y: lineH + (Math.random() - 0.5) * 60,
+        life: 1, maxLife: 0.3 + Math.random() * 0.4,
+        vx: (Math.random() - 0.5) * 40,
+        vy: (Math.random() - 0.8) * 50,
+        r: r, g: g, b: b,
+      });
+    }
+    // 绘制存活火星
+    for (var si = _sparkPool.length - 1; si >= 0; si--) {
+      var sp = _sparkPool[si];
+      sp.life -= 1 / 30 / sp.maxLife; // 30fps 递减
+      if (sp.life <= 0) { _sparkPool.splice(si, 1); continue; }
+      sp.x += sp.vx / 30;
+      sp.y += sp.vy / 30;
+      ctx.fillStyle = 'rgba(' + sp.r + ',' + sp.g + ',' + sp.b + ',' + sp.life.toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 1.5 * sp.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } // end per-lane loop
 
-  // 全局推进标签（基于三线均值）
+  // === 全局推进标签（三线均值） ===
   var avgFL = frontLines.reduce(function(a, b) { return a + b; }, 0) / 3;
-  ctx.font = '13px Microsoft YaHei, sans-serif';
+  ctx.font = 'bold 14px Microsoft YaHei, sans-serif';
   ctx.textAlign = 'center';
   if (avgFL > 300) {
-    ctx.fillStyle = 'rgba(255,150,150,0.8)';
-    ctx.fillText('→ 红方推进中', DESIGN_W / 2, 85);
+    ctx.fillStyle = 'rgba(255,150,150,0.9)';
+    ctx.fillText('→ 红方推进中', DESIGN_W / 2, 82);
   } else if (avgFL < -300) {
-    ctx.fillStyle = 'rgba(150,150,255,0.8)';
-    ctx.fillText('← 蓝方推进中', DESIGN_W / 2, 85);
+    ctx.fillStyle = 'rgba(150,150,255,0.9)';
+    ctx.fillText('← 蓝方推进中', DESIGN_W / 2, 82);
+  } else if (Math.abs(avgFL) > 150) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText('⚔ 激烈交战中', DESIGN_W / 2, 82);
   }
 }
 
