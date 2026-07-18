@@ -294,8 +294,12 @@ function processEvents(state) {
         }
         break;
       case 'castle_hit':
-        // B10: 攻城碎石
-        castleDebris.push({ target: evt.target, lane: evt.lane, time: now });
+        // B10: 战线攻城碎石（城堡中心爆发）
+        castleDebris.push({ target: evt.target, lane: evt.lane, time: now, x: null, y: null });
+        break;
+      case 'soldier_attack_castle':
+        // B10: 单兵攻城碎石（士兵位置小爆发）
+        castleDebris.push({ target: evt.team === 'red' ? 'blue' : 'red', lane: evt.lane, time: now, x: evt.x, y: evt.y });
         break;
       // 抖音社交事件
       case 'like':
@@ -372,9 +376,9 @@ function updateEffects() {
     if (now - castleArrows[i].time > castleArrows[i].duration) castleArrows.splice(i, 1);
   }
 
-  // B10: 攻城碎石（0.6s）
+  // B10: 攻城碎石（0.5s）
   for (let i = castleDebris.length - 1; i >= 0; i--) {
-    if (now - castleDebris[i].time > 600) castleDebris.splice(i, 1);
+    if (now - castleDebris[i].time > 500) castleDebris.splice(i, 1);
   }
 
   // C1: 事件播报（2s）
@@ -965,26 +969,30 @@ function drawCastleDebris(ctx) {
   for (var i = 0; i < castleDebris.length; i++) {
     var cd = castleDebris[i];
     var age = now - cd.time;
-    var progress = age / 600;
+    var progress = age / 500;
     var alpha = 1 - progress;
-    var cx = cd.target === 'red' ? 90 : DESIGN_W - 90;
-    var cy = laneY[cd.lane] || DESIGN_H * 0.55;
-    // 固定种子让每帧碎片位置一致
+    var cx = cd.x != null ? cd.x : (cd.target === 'red' ? 90 : DESIGN_W - 90);
+    var cy = cd.y != null ? cd.y : (laneY[cd.lane] || DESIGN_H * 0.55);
+    var isSmall = cd.x != null; // 单兵碎石更小更少
+    var count = isSmall ? 4 : 8;
+    var maxDist = isSmall ? 30 : 60;
     var seed = cd.time % 1000;
-    for (var p = 0; p < 8; p++) {
-      var angle = (p / 8) * Math.PI * 2 + seed * 0.01;
-      var dist = progress * 60 + p * 5;
+    for (var p = 0; p < count; p++) {
+      var angle = (p / count) * Math.PI * 2 + seed * 0.01;
+      var dist = progress * maxDist + p * 3;
       var px = cx + Math.cos(angle) * dist;
-      var py = cy + Math.sin(angle) * dist - progress * 30;
-      var size = 2 + (1 - progress) * 3;
+      var py = cy + Math.sin(angle) * dist - progress * 20;
+      var size = 1.5 + (1 - progress) * (isSmall ? 2 : 3);
       ctx.fillStyle = 'rgba(180,150,120,' + alpha.toFixed(2) + ')';
       ctx.fillRect(px - size / 2, py - size / 2, size, size);
     }
-    // 冲击微尘
-    ctx.fillStyle = 'rgba(200,180,150,' + (alpha * 0.3).toFixed(2) + ')';
-    ctx.beginPath();
-    ctx.arc(cx, cy, progress * 40, 0, Math.PI * 2);
-    ctx.fill();
+    if (!isSmall) {
+      // 冲击微尘（仅战线级）
+      ctx.fillStyle = 'rgba(200,180,150,' + (alpha * 0.3).toFixed(2) + ')';
+      ctx.beginPath();
+      ctx.arc(cx, cy, progress * 40, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 

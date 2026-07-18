@@ -180,7 +180,8 @@ class GameEngine {
           this.pendingEvents.push(event);
           break;
         }
-        case 'castle_hit': {
+        case 'castle_hit':
+        case 'soldier_attack_castle': {
           this.pendingEvents.push(event);
           break;
         }

@@ -180,6 +180,11 @@ class Battle {
       if (t.animState === 'death') continue;
       if (t.speed <= 0) continue;
 
+      // 检查是否到达敌方城堡（前线推到最大 + 士兵在城堡射程内）
+      const enemyCastleX = t.team === 'red' ? CANVAS_W - 90 : 90;
+      const atEnemyCastle = Math.abs(t.x - enemyCastleX) < 120
+        && Math.abs(this.frontLines[t.lane]) >= bal.FRONTLINE_MAX;
+
       // 检查前方是否有同线敌人（远程用远程距离，近战用近战距离）
       const enemies = allAlive.filter(e => e.team !== t.team && e.lane === t.lane);
       let hasEnemyNearby = false;
@@ -190,7 +195,7 @@ class Battle {
         }
       }
 
-      if (!hasEnemyNearby) {
+      if (!hasEnemyNearby && !atEnemyCastle) {
         const moveX = t.speed * bal.SPEED_FACTOR;
         if (t.team === 'red') {
           t.x = Math.min(t.x + moveX, CANVAS_W - 50);
@@ -203,7 +208,7 @@ class Battle {
       if (now - t.createdAt < anim.IDLE_AFTER_SPAWN) {
         t.animState = 'idle';
       } else {
-        t.animState = hasEnemyNearby ? 'attack' : 'walk';
+        t.animState = (hasEnemyNearby || atEnemyCastle) ? 'attack' : 'walk';
       }
     }
 
@@ -401,7 +406,29 @@ class Battle {
       }
     }
 
-    // === 7. 标记死亡兵种（保留播死亡动画） ===
+    // === 7. 士兵攻城反馈 ===
+    const now7 = Date.now();
+    for (const t of this.troops) {
+      if (t.animState === 'death' || t.hp <= 0) continue;
+      const enemyCastleX = t.team === 'red' ? CANVAS_W - 90 : 90;
+      if (Math.abs(t.x - enemyCastleX) < 120
+          && Math.abs(this.frontLines[t.lane]) >= bal.FRONTLINE_MAX
+          && t.animState === 'attack') {
+        if (!t._lastCastleAttack || now7 - t._lastCastleAttack > 500) {
+          t._lastCastleAttack = now7;
+          this.events.push({
+            type: 'soldier_attack_castle',
+            team: t.team,
+            lane: t.lane,
+            x: t.x,
+            y: t.y,
+            time: now7,
+          });
+        }
+      }
+    }
+
+    // === 8. 标记死亡兵种（保留播死亡动画） ===
     let deadCount = 0;
     for (const t of this.troops) {
       if (t.animState === 'death') continue; // 已在死亡动画中
@@ -412,7 +439,7 @@ class Battle {
       }
     }
 
-    // === 6. 更新战线（三线独立计算） ===
+    // === 9. 更新战线（三线独立计算） ===
     const laneDmg = [{ red: 0, blue: 0 }, { red: 0, blue: 0 }, { red: 0, blue: 0 }];
     for (const t of redTroops) {
       if (t.hp > 0) laneDmg[t.lane].red += t.damage;
