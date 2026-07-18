@@ -1,6 +1,9 @@
 # war-danmaku
 # Usage: .\start.ps1
 
+# 控制台切 UTF-8，否则 Pino 中文乱码
+chcp 65001 > $null
+
 $root = $PSScriptRoot
 Set-Location $root
 
@@ -46,6 +49,19 @@ else {
   Write-Host "[INFO] No Bilibili room configured, relay skipped" -ForegroundColor Gray
 }
 
+# Check Douyin config
+$douyinEnabled = $secrets.douyin.enabled
+
+$douyinProc = $null
+if ($douyinEnabled -eq $true) {
+  Start-Sleep 1
+  $douyinProc = Start-Process -FilePath "node" -ArgumentList "server/danmaku/douyin.js" -NoNewWindow -PassThru
+  Write-Host "[OK] Douyin adapter (PID $($douyinProc.Id))" -ForegroundColor Green
+}
+else {
+  Write-Host "[INFO] Douyin adapter disabled, skipped" -ForegroundColor Gray
+}
+
 Write-Host ""
 Write-Host "Open http://localhost:3000 (game)" -ForegroundColor White
 Write-Host "Close this window to stop all" -ForegroundColor Gray
@@ -56,10 +72,12 @@ try {
   $serverProc.WaitForExit()
   if ($frontendProc) { $frontendProc.WaitForExit() }
   if ($relayProc) { $relayProc.WaitForExit() }
+  if ($douyinProc) { $douyinProc.WaitForExit() }
 }
 catch {
   Write-Host "Shutting down..." -ForegroundColor Yellow
   if (!$serverProc.HasExited) { $serverProc.Kill() }
   if ($frontendProc -and !$frontendProc.HasExited) { $frontendProc.Kill() }
   if ($relayProc -and !$relayProc.HasExited) { $relayProc.Kill() }
+  if ($douyinProc -and !$douyinProc.HasExited) { $douyinProc.Kill() }
 }

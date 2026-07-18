@@ -6,7 +6,7 @@
 ## 命令
 
 ```bash
-.\start.ps1             # 一键启动全部（游戏服务器 + 前端 + 弹幕中继）→ http://localhost:3000
+.\start.ps1             # 一键启动全部（游戏服务器 8765 + 前端 3000 + B站中继 + 抖音适配器）
 npm run server          # 单独启动游戏服务器 (WebSocket :8765)
 npm run frontend        # 单独启动前端 (OBS 浏览器源 http://localhost:3000)
 npm run restart         # 杀旧服务器 + 重启（解决端口占用）
@@ -30,15 +30,20 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 单体 Node.js 服务器 + 纯 HTML5 Canvas 前端。数据流:
 
 ```
-抖音弹幕 → Danmaku Adapter → Game Engine → WebSocket → 前端 Canvas 渲染
-                              ↓
-                         积分/排行/段位（内存存储，Phase 3 加 SQLite）
+B站弹幕 → bilibili-relay.py → :8766 (Relay WS)
+抖音弹幕 → 可遇AI :12011 → douyin.js → :8766 (Relay WS)
+                                            ↓
+                                      Game Engine
+                                            ↓
+                                   WebSocket :8765 → 前端 Canvas
+                                            ↓
+                                   积分/排行（SQLite 持久化）
 ```
 
-- **Server**: Node.js + `ws` 库。单进程处理 WebSocket + 游戏逻辑 + 弹幕接入
-- **Frontend**: 单个 `index.html` + Canvas JS。OBS 浏览器源直接填 URL 抓画面
-- **Danmaku**: 开发期用 B站开放协议调试，上线切抖音第三方工具
-- **无数据库**: Phase 1-2 用内存存储（重启清空），Phase 3 加 SQLite
+- **Server**: Node.js + `ws` 库。单进程处理 WebSocket + 游戏逻辑
+- **Frontend**: 单个 `index.html` + Canvas JS。OBS 浏览器源直接填 URL
+- **Danmaku**: B站用 `bilibili-relay.py`（Python），抖音用 `douyin.js`（Node.js）→ 可遇AI 弹幕工具
+- **Database**: SQLite，重启不丢失
 
 ## 🚨 核心规则
 
@@ -47,6 +52,10 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 - async/await 不用 bare `Promise`，always await
 - WebSocket 断连必须自动重连（exponential backoff）
 - `process.exit()` 只在 `index.js` 入口用
+- 日志用 `const logger = require('./logger')`，不用 `console.log`
+  - 开发模式终端彩色输出 (`chcp 65001` 切 UTF-8 防乱码)
+  - 生产模式 `$env:NODE_ENV="production"` → `server/logs/combined.log` + `error.log`
+  - 级别控制: `$env:LOG_LEVEL="debug"`
 
 ### Canvas 渲染
 - Canvas 尺寸从配置读，不写死 px。OBS 常见分辨率 1920×1080 / 1280×720
@@ -75,8 +84,11 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 | `server/config.js` | 兵种属性、数值参数、平衡系数。改了要重启 server |
 | `server/gameEngine.js` | 游戏状态机（WAITING→COUNTDOWN→PLAYING→ROUND_END）。所有游戏共用 |
 | `server/battle.js` | 战斗逻辑（出兵、交战计算、战线推进）。性能敏感，避免每帧遍历全量兵种 |
-| `server/wsServer.js` | WebSocket 服务。断连重连逻辑在这里 |
-| `server/ranking.js` | 积分/段位/排行榜。纯内存，改数据结构要兼容旧积分 |
+| `server/wsServer.js` | WebSocket 服务。两个端口: 8765(前端) + 8766(弹幕中继) |
+| `server/ranking.js` | 积分/段位/排行榜。SQLite 持久化 |
+| `server/logger.js` | Pino 日志。开发=pino-pretty→终端，生产=JSON→server/logs/ |
+| `server/danmaku/douyin.js` | 抖音适配器。连可遇AI :12011，翻译弹幕/礼物/点赞/关注/进房 |
+| `server/danmaku/bilibili-relay.py` | B站适配器。blivedm 库连直播间 → relay :8766 |
 | `frontend/renderer.js` | Canvas 渲染主循环。帧率目标 30fps（直播 30fps 足够，省 CPU） |
 | `frontend/sprites.js` | 兵种精灵绘制。几何图形时期（Phase 1）vs 精灵图时期（Phase 3）实现不同 |
 | `frontend/audio.js` | 音效引擎。文件播放模式：往 `frontend/assets/audio/` 丢 MP3 即可。IIFE 包裹 |

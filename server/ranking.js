@@ -5,6 +5,7 @@
  */
 
 const config = require('./config');
+const logger = require('./logger');
 
 class Ranking {
   /**
@@ -34,7 +35,7 @@ class Ranking {
       loaded++;
     }
     if (loaded > 0) {
-      console.log(`[Ranking] 从 DB 恢复 ${loaded} 名玩家`);
+      logger.info(`[RANKING] 从 DB 恢复 ${loaded} 名玩家`);
     }
   }
 

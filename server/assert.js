@@ -22,8 +22,8 @@ class AssertionError extends Error {
 function assert(condition, message) {
   if (!condition) {
     const err = new AssertionError(message);
-    logger.error('ENGINE', err.message);
-    logger.error('ENGINE', err.stack);
+    logger.error(`[ENGINE] ${err.message}`);
+    logger.error(`[ENGINE] ${err.stack}`);
     throw err;
   }
 }
@@ -32,7 +32,7 @@ function assert(condition, message) {
 function troopExists(troopDef, troopKey) {
   if (!troopDef) {
     const msg = `未知兵种: "${troopKey}" — config.TROOPS 中不存在此 key`;
-    logger.error('BATTLE', msg);
+    logger.error(`[BATTLE] ${msg}`);
     throw new AssertionError(msg);
   }
 }
@@ -41,7 +41,7 @@ function troopExists(troopDef, troopKey) {
 function validTeam(team) {
   if (team !== 'red' && team !== 'blue') {
     const msg = `非法阵营: "${team}" — 必须是 'red' 或 'blue'`;
-    logger.error('ENGINE', msg);
+    logger.error(`[ENGINE] ${msg}`);
     throw new AssertionError(msg);
   }
 }
@@ -50,7 +50,7 @@ function validTeam(team) {
 function stateIn(actual, allowed) {
   if (!allowed.includes(actual)) {
     const msg = `非法状态: "${actual}" — 允许的状态: [${allowed.join(', ')}]`;
-    logger.error('ENGINE', msg);
+    logger.error(`[ENGINE] ${msg}`);
     throw new AssertionError(msg);
   }
 }
@@ -59,7 +59,7 @@ function stateIn(actual, allowed) {
 function castleHP(hp, side) {
   if (hp < 0 || !Number.isFinite(hp)) {
     const msg = `城堡 HP 异常: ${side}=${hp} — 应 >= 0`;
-    logger.error('ENGINE', msg);
+    logger.error(`[ENGINE] ${msg}`);
     throw new AssertionError(msg);
   }
 }
@@ -68,7 +68,7 @@ function castleHP(hp, side) {
 function playerId(id, context) {
   if (!id || typeof id !== 'string') {
     const msg = `playerId 缺失或非法: "${id}" (context: ${context})`;
-    logger.error('ENGINE', msg);
+    logger.error(`[ENGINE] ${msg}`);
     throw new AssertionError(msg);
   }
 }
@@ -80,7 +80,7 @@ const playerIdNotEmpty = playerId;
 function knownMsgType(type) {
   const known = ['join', 'danmaku', 'gift'];
   if (!known.includes(type)) {
-    logger.warn('WS', `未知消息类型: "${type}" — 忽略`);
+    logger.warn(`[WS] 未知消息类型: "${type}" — 忽略`);
     return false;
   }
   return true;

@@ -47,7 +47,7 @@ function connect() {
   ws = new WebSocket(WS_URL);
 
   ws.on('open', () => {
-    logger.info('SIMULATOR', `已连接 (${playerId})`);
+    logger.info(`[SIMULATOR] 已连接 (${playerId})`);
     process.stdout.write('> ');
   });
 
@@ -64,12 +64,12 @@ function connect() {
   });
 
   ws.on('close', () => {
-    logger.warn('SIMULATOR', '断开，5秒后重连...');
+    logger.warn('[SIMULATOR] 断开，5秒后重连...');
     reconnectTimer = setTimeout(connect, 5000);
   });
 
   ws.on('error', (err) => {
-    logger.error('SIMULATOR', `连接失败: ${err.message}`);
+    logger.error(`[SIMULATOR] 连接失败: ${err.message}`);
   });
 }
 
@@ -110,10 +110,10 @@ function handle(input) {
     case 'join':
       if (parts[1] === 'red' || parts[1] === 'r' || parts[1] === '1') {
         send({ type: 'join', team: 'red', playerId, playerName: playerId });
-        logger.info('SIMULATOR', '→ 加入红方');
+        logger.info('[SIMULATOR] → 加入红方');
       } else if (parts[1] === 'blue' || parts[1] === 'b' || parts[1] === '2') {
         send({ type: 'join', team: 'blue', playerId, playerName: playerId });
-        logger.info('SIMULATOR', '→ 加入蓝方');
+        logger.info('[SIMULATOR] → 加入蓝方');
       } else {
         process.stdout.write('用法: join red|blue\n> ');
         return;
@@ -122,18 +122,18 @@ function handle(input) {
 
     case 'red': case 'r': case '1':
       send({ type: 'join', team: 'red', playerId, playerName: playerId });
-      logger.info('SIMULATOR', '→ 加入红方');
+      logger.info('[SIMULATOR] → 加入红方');
       break;
 
     case 'blue': case 'b': case '2':
       send({ type: 'join', team: 'blue', playerId, playerName: playerId });
-      logger.info('SIMULATOR', '→ 加入蓝方');
+      logger.info('[SIMULATOR] → 加入蓝方');
       break;
 
     case 'gift': case 'g':
       if (parts[1]) {
         send({ type: 'gift', giftId: parts[1], troopKey: parts[1], playerId, playerName: playerId });
-        logger.info('SIMULATOR', `→ 送礼: ${parts[1]}`);
+        logger.info(`[SIMULATOR] → 送礼: ${parts[1]}`);
       } else {
         process.stdout.write('用法: gift <兵种key>\n  可用: militia swordsman knight archer catapult royalGuard giant dragonKnight wrathOfGod warChest\n> ');
         return;
@@ -144,7 +144,7 @@ function handle(input) {
       if (parts[1]) {
         const text = parts.slice(1).join(' ');
         send({ type: 'danmaku', text, playerId, playerName: playerId });
-        logger.info('SIMULATOR', `→ 弹幕: "${text}"`);
+        logger.info(`[SIMULATOR] → 弹幕: "${text}"`);
       } else {
         process.stdout.write('用法: danmaku <文本>\n> ');
         return;
@@ -163,7 +163,7 @@ function handle(input) {
 
     default:
       send({ type: 'danmaku', text: line, playerId, playerName: playerId });
-      logger.info('SIMULATOR', `→ 弹幕: "${line}"`);
+      logger.info(`[SIMULATOR] → 弹幕: "${line}"`);
   }
 
   process.stdout.write('> ');

@@ -241,6 +241,17 @@ function processEvents(state) {
         dragonRoars.push({ x: evt.x, lane: evt.lane, team: evt.team, time: now });
         eventBanners.push({ text: '🦁 ' + (evt.ownerName || '龙骑士') + ' 发出恐惧咆哮！', time: now, color: '#FFD700' });
         break;
+      // 抖音社交事件
+      case 'like':
+        dmText = `❤️ ${evt.playerName} 点赞！`;
+        break;
+      case 'follow':
+        dmText = `⭐ ${evt.playerName} 关注了直播间！`;
+        eventBanners.push({ text: `⭐ ${evt.playerName} 关注了直播间！`, time: now, color: '#FF69B4' });
+        break;
+      case 'share':
+        dmText = `🔗 ${evt.playerName} 分享了直播间！`;
+        break;
       case 'expire':
         // B4: 死亡动画
         deathAnims.push({ x: W / 2 + (Math.random() - 0.5) * 400, y: H * 0.5 + Math.random() * 200, key: evt.key, time: now });

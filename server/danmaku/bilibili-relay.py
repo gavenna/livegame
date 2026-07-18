@@ -12,8 +12,29 @@ import sys
 import time
 import threading
 import asyncio
+import logging
+from logging.handlers import RotatingFileHandler
 import websocket
 import aiohttp
+
+# ====== 日志 ======
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger('bilibili-relay')
+logger.setLevel(logging.INFO)
+
+fh = RotatingFileHandler(
+    os.path.join(LOG_DIR, 'bilibili-relay.log'),
+    maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
+)
+fh.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
+logger.addHandler(fh)
+
+# 终端也输出
+ch = logging.StreamHandler(sys.stdout)
+ch.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%H:%M:%S'))
+logger.addHandler(ch)
 
 from blivedm import BLiveClient, BaseHandler
 from blivedm.models.web import DanmakuMessage, GiftMessage, SuperChatMessage, GuardBuyMessage
@@ -31,11 +52,11 @@ ROOM_ID = bili.get('roomId', 0)
 COOKIE_STR = bili.get('cookie', '')
 
 if not ROOM_ID:
-    print("[relay] 请在 server/secrets.json 的 bilibili.roomId 填写直播间号")
+    logger.info("请在 server/secrets.json 的 bilibili.roomId 填写直播间号")
     sys.exit(1)
 if not COOKIE_STR:
-    print("[relay] 请复制完整 Cookie 到 server/secrets.json → bilibili.cookie")
-    print("[relay] 获取: F12 → Network → 任意请求 → Request Headers → 复制 Cookie 整行")
+    logger.info("请复制完整 Cookie 到 server/secrets.json → bilibili.cookie")
+    logger.info("获取: F12 → Network → 任意请求 → Request Headers → 复制 Cookie 整行")
     sys.exit(1)
 
 # Cookie 字符串 → 字典
@@ -60,10 +81,10 @@ def connect_game():
             w.connect(GAME_WS_URL)
             with ws_lock:
                 ws = w
-            print(f"[relay] 已连接游戏服务器 {GAME_WS_URL}")
+            logger.info(f"已连接游戏服务器 {GAME_WS_URL}")
             return
         except Exception as e:
-            print(f"[relay] 连接游戏服务器 ({i+1}/10): {e}")
+            logger.info(f"连接游戏服务器 ({i+1}/10): {e}")
             time.sleep(min(2 ** i, 30))
     sys.exit(1)
 
@@ -152,7 +173,7 @@ def _map_gift(gift: GiftMessage):
 
 # ====== 主入口 ======
 async def main():
-    print(f"[relay] B站弹幕中继 → 直播间 {ROOM_ID}")
+    logger.info(f"B站弹幕中继 → 直播间 {ROOM_ID}")
 
     connect_game()
 
@@ -164,12 +185,12 @@ async def main():
     client = BLiveClient(ROOM_ID, uid=None, session=session)
     client.set_handler(RelayHandler())
 
-    print("[relay] 初始化直播间...")
+    logger.info("初始化直播间...")
     ok = await client.init_room()
     if ok:
-        print(f"[relay] 连接成功 (uid={client.uid})")
+        logger.info(f"连接成功 (uid={client.uid})")
     else:
-        print("[relay] 初始化失败 (Cookie 可能过期)")
+        logger.info("初始化失败 (Cookie 可能过期)")
         await session.close()
         return
 
@@ -186,4 +207,4 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("[relay] 已关闭")
+        logger.info("已关闭")

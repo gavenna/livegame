@@ -118,17 +118,34 @@ module.exports = {
     '霜狼': 'join_blue',
     '杀': 'spawn_militia_3',
     '666': 'spawn_militia_3',
+    '赞': 'spawn_militia_3',    // 抖音点赞映射
     '冲': 'speed_boost',
   },
 
-  // === 抖音礼物 ID 映射（待补充实际 ID） ===
+  // === 抖音礼物 ID 映射 ===
+  // 精确 ID 映射优先，未匹配则走 douyin.js 价格阶梯
+  // 上线时根据实际抖音礼物 ID 填入（ID 可能随版本变动）
   DOUYIN_GIFT_MAP: {
-    // 正式上线时填入抖音实际的礼物 ID
-    // 格式: '礼物ID': '兵种key'
-    // '1': 'swordsman',    // 小❤️
-    // '5': 'knight',       // 棒棒糖
-    // '10': 'archer',      // 鲜花
-    // ...
+    // '1': 'swordsman',    // 小心心 1抖币
+    // '5': 'knight',       // 棒棒糖 5抖币
+    // '10': 'archer',      // 鲜花 10抖币
+    // '30': 'catapult',    // 铁锤 30抖币
+    // '99': 'royalGuard',  // 盾墙 99抖币
+    // '199': 'fireArrow',  // 火矢齐射 199抖币
+    // '299': 'batteringRam', // 攻城锤 299抖币
+    // '520': 'giant',      // 城堡 520抖币
+    // '1200': 'dragonKnight', // 龙骑士 1200抖币
+    // '3000': 'wrathOfGod',   // 天神之怒 3000抖币
+  },
+
+  // === 抖音适配器配置 ===
+  DOUYIN_ADAPTER: {
+    TOOL_WS_URL: 'ws://localhost:12011', // 可遇AI WebSocket 地址
+    LIKE_COOLDOWN_MS: 1000,         // 点赞冷却（单用户 ms）
+    AUTO_JOIN_ON_ENTER: true,       // 进房自动加入随机阵营
+    ENTER_JOIN_CHANCE: 0,           // 进房自动加入概率（0=全加入，0.5=50%）
+    FOLLOW_REWARD_TROOP: 'militia', // 关注奖励兵种（null=无奖励）
+    FOLLOW_REWARD_COUNT: 1,         // 关注奖励兵种数量
   },
 
   // === 兵种动画 ===
@@ -147,22 +164,10 @@ module.exports = {
     ATTACK_RANGE_FACTOR: 1.3,     // 攻击动画触发范围 = COLLISION_RANGE × 此值
   },
 
-  // === 日志（开发调试） ===
-  LOG: {
-    LEVEL: 'DEBUG',           // 全局最低级别: DEBUG | INFO | WARN | ERROR
-    TAGS: {
-      WS: true,               // WebSocket 连接/消息
-      ENGINE: true,           // 游戏状态机
-      BATTLE: true,           // 战斗计算（高频，INFO 级；设 'debug' 开启每 tick 细节）
-      DANMAKU: true,          // 弹幕处理
-      RANKING: true,          // 积分/排行
-      GIFT: true,             // 礼物处理
-      SERVER: true,           // 服务器启动/关闭
-      SIMULATOR: true,        // 模拟器（仅 simulator.js）
-    },
-    TO_FILE: true,            // 日志写入文件 (server/logs/)
-    TO_CONSOLE: true,         // 日志输出终端
-  },
+  // === 日志 ===
+  // 使用 Pino，通过环境变量控制: LOG_LEVEL=debug|info|warn|error
+  // 开发模式: pino-pretty 彩色输出到终端
+  // 生产模式: NODE_ENV=production → server/logs/combined.log + error.log
 
   // === 渲染 ===
   CANVAS_WIDTH: 1920,

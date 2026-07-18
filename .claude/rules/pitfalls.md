@@ -299,3 +299,37 @@ if (gen !== genRef.current) return; // 过期丢弃
 **根因**：`ctx.restore()` 写在 HP 条和名字绘制之后，UI 元素受 drawWithAnim() 内的 translate/scale/rotate 污染。
 
 **修复/预防**：`ctx.restore()` 紧跟在 drawImage 之后、UI 元素之前。动画 transform 和 UI 渲染用 save/restore 隔离。
+
+---
+
+### G10. Windows PowerShell + Pino → 中文乱码
+
+**症状**：Node.js 进程的 Pino 日志中文显示为乱码（如 `鍙亣AI`），但 Python 进程的日志中文正常。
+
+**根因**：Windows PowerShell 控制台默认代码页是 GBK (936)。Pino/pino-pretty 强制输出 UTF-8 字节流，终端用 GBK 解码 → 乱码。Python `logging` 用系统代码页输出，所以正常。
+
+**哪类 agent 会踩**：任何在 Windows 上配置 Pino 日志的
+
+**修复/预防**：
+1. `start.ps1` 开头加 `chcp 65001 > $null` — 把控制台切到 UTF-8
+2. 不要让 Pino 输出到 GBK 终端再 redirect 到文件 — 用 `pino/file` transport 直接写文件
+3. 验证方式：日志中出现 `[INFO]` 而非 `[32mINFO[39m` 且中文可读
+
+---
+
+### G11. 正则批量迁移 logger 调用 → 模板字符串/相邻字符串断裂
+
+**症状**：`node --check` 报 `SyntaxError: missing ) after argument list` 或 `Invalid or unexpected token`，行内出现两个相邻的单引号字符串（如 `'[TAG] '文字'`）或截断行。
+
+**根因**：用正则 `s.replace(/logger\.(\w+)\('([A-Z]+)',\s*/g, 'logger.$1(\'[$2] ')` 迁移 logger 调用时，只处理了 tag 部分，没有正确处理原消息参数的类型：
+- 原始 `logger.info('TAG', 'plain msg')` → 正则产生 `logger.info('[TAG] 'plain msg')` — 两个相邻单引号字符串，无操作符
+- 原始 `logger.info('TAG', \`template\`)` → 正则产生 `logger.info('[TAG] \`template\`)` — 字符串 + 模板字面量相邻
+- 原始 `logger.info('TAG', variable)` → 正则产生 `logger.info('[TAG] variable)` — 变量引用被当作独立标识符
+
+**哪类 agent 会踩**：任何做批量代码迁移的
+
+**修复/预防**：
+1. 不要用正则批量改 logger 调用 — 逐文件手工改，每个调用确认参数类型
+2. 改完后必须 `node --check` 逐个文件验证
+3. 优先改 template literal 版本（`\`[TAG] msg\``），它兼容变量和纯文本
+4. 用 `grep` 找出所有 `logger.` 行，确认没有两个相邻单引号字符串

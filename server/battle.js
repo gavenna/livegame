@@ -43,7 +43,7 @@ class Battle {
       actualKey = weightedRandom(config.WAR_CHEST_POOL, config.WAR_CHEST_WEIGHTS);
       actualDef = config.TROOPS[actualKey];
       assert.troopExists(actualDef, actualKey);
-      logger.info('BATTLE', `${playerName || playerId} 开盲盒 → ${actualDef.name}`);
+      logger.info(`[BATTLE] ${playerName || playerId} 开盲盒 → ${actualDef.name}`);
     }
 
     // 三线分线：显式指定 > round-robin
@@ -103,7 +103,7 @@ class Battle {
         castleDmg: actualDef.castleDmg || 0,
         time: Date.now(),
       });
-      logger.info('BATTLE', `${playerName || playerId} 释放全局技能: ${actualDef.name} (伤害:${actualDef.damage})`);
+      logger.info(`[BATTLE] ${playerName || playerId} 释放全局技能: ${actualDef.name} (伤害:${actualDef.damage})`);
       return troop;
     }
 
@@ -118,7 +118,7 @@ class Battle {
         damage: actualDef.damage,
         time: Date.now(),
       });
-      logger.info('BATTLE', `${playerName || playerId} 派出攻城兵种: ${actualDef.name} (城堡伤害:${actualDef.damage})`);
+      logger.info(`[BATTLE] ${playerName || playerId} 派出攻城兵种: ${actualDef.name} (城堡伤害:${actualDef.damage})`);
       return troop;
     }
 
@@ -136,7 +136,7 @@ class Battle {
       time: Date.now(),
     });
 
-    logger.debug('BATTLE', `${actualDef.name} 生成 — ${team}方 (${playerName || playerId}) x=${Math.round(x)} dmg=${actualDef.damage} hp=${actualDef.hp} speed=${actualDef.speed}`);
+    logger.debug(`[BATTLE] ${actualDef.name} 生成 — ${team}方 (${playerName || playerId}) x=${Math.round(x)} dmg=${actualDef.damage} hp=${actualDef.hp} speed=${actualDef.speed}`);
 
     return troop;
   }
@@ -167,7 +167,7 @@ class Battle {
       return true;
     });
     if (oldLen !== this.troops.length) {
-      logger.debug('BATTLE', `清理: ${oldLen - this.troops.length} 兵种 (剩余 ${this.troops.length})`);
+      logger.debug(`[BATTLE] 清理: ${oldLen - this.troops.length} 兵种 (剩余 ${this.troops.length})`);
     }
 
     // === 2. 兵种移动 + 动画状态 ===
@@ -404,7 +404,7 @@ class Battle {
       return red + blue > 0 ? (red - blue) / (red + blue) * bal.PUSH_FACTOR * 1000 : 0;
     }).reduce((a, b) => a + Math.abs(b), 0) / LANE_COUNT;
     if (maxFL > 500 && avgPush > 5) {
-      logger.debug('BATTLE', `战线: [${this.frontLines.map(f => Math.round(f)).join(',')}] 红dmg:${redTotalDmg} 蓝dmg:${blueTotalDmg} 兵:${this.troops.length} 死:${deadCount}`);
+      logger.debug(`[BATTLE] 战线: [${this.frontLines.map(f => Math.round(f)).join(',')}] 红dmg:${redTotalDmg} 蓝dmg:${blueTotalDmg} 兵:${this.troops.length} 死:${deadCount}`);
     }
 
     const tickEvents = [...this.events];
@@ -429,7 +429,7 @@ class Battle {
         const rebound = bal.FRONTLINE_MAX * 0.3;
         const oldFL = this.frontLines[i];
         this.frontLines[i] = Math.sign(this.frontLines[i]) * (bal.FRONTLINE_MAX - rebound);
-        logger.info('BATTLE', `战线到城堡! 线${i} ${this.frontLines[i] > 0 ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
+        logger.info(`[BATTLE] 战线到城堡! 线${i} ${this.frontLines[i] > 0 ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
         results.push({
           target: this.frontLines[i] > 0 ? 'blue' : 'red',
           damage: dmg,

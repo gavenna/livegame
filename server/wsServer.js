@@ -95,12 +95,12 @@ function startWSServer(port) {
   const wss = new WebSocketServer({ server });
 
   server.listen(port, () => {
-    logger.info('WS', `HTTP + WebSocket on http://localhost:${port}`);
+    logger.info(`[WS] HTTP + WebSocket on http://localhost:${port}`);
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      logger.error('WS', `Port ${port} 已被占用 — 请先关闭旧进程: netstat -ano | grep ${port}`);
+      logger.error(`[WS] Port ${port} 已被占用 — 请先关闭旧进程: netstat -ano | grep ${port}`);
       process.exit(1);
     }
     throw err;
@@ -117,12 +117,12 @@ function startRelayWSS(port) {
   const wss = new WebSocketServer({ port });
 
   wss.on('listening', () => {
-    logger.info('WS', `Relay WebSocket on port ${port}`);
+    logger.info(`[WS] Relay WebSocket on port ${port}`);
   });
 
   wss.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      logger.error('WS', `Relay port ${port} 已被占用`);
+      logger.error(`[WS] Relay port ${port} 已被占用`);
       process.exit(1);
     }
     throw err;
@@ -135,7 +135,7 @@ function startRelayWSS(port) {
 function setupConnections(wss) {
 
   wss.on('connection', (ws) => {
-    logger.info('WS', `Client connected. Total: ${clients.size + 1}`);
+    logger.info(`[WS] Client connected. Total: ${clients.size + 1}`);
     clients.add(ws);
 
     ws.on('close', () => {
@@ -143,11 +143,11 @@ function setupConnections(wss) {
       for (const [pid, conn] of playerConns) {
         if (conn === ws) { playerConns.delete(pid); break; }
       }
-      logger.info('WS', `Client disconnected. Total: ${clients.size}`);
+      logger.info(`[WS] Client disconnected. Total: ${clients.size}`);
     });
 
     ws.on('error', (err) => {
-      logger.error('WS', `Client error: ${err.message}`);
+      logger.error(`[WS] Client error: ${err.message}`);
       clients.delete(ws);
     });
 
@@ -157,7 +157,7 @@ function setupConnections(wss) {
         assert.assert(!!msg.type, 'WS 消息缺少 type 字段');
 
         if (assert.knownMsgType(msg.type)) {
-          logger.debug('WS', `Received: type=${msg.type} player=${msg.playerId || '?'}`);
+          logger.debug(`[WS] Received: type=${msg.type} player=${msg.playerId || '?'}`);
         }
 
         // 记录 playerId → ws 映射
@@ -171,12 +171,12 @@ function setupConnections(wss) {
         }
       } catch (e) {
         if (e.name === 'AssertionError') throw e; // 断言错误上抛
-        logger.error('WS', `Invalid message: ${e.message}`);
+        logger.error(`[WS] Invalid message: ${e.message}`);
       }
     });
   });
 
-  logger.info('WS', 'Server started');
+  logger.info('[WS] Server started');
 }
 
 /**

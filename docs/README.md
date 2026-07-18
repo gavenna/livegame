@@ -1,6 +1,25 @@
-# war-danmaku — 弹幕互动阵营对抗游戏
+# war-danmaku
 
-> 中世纪战争题材 · 抖音平台 · Node.js + Canvas  
+> 弹幕互动阵营对抗游戏 · 抖音平台 · Node.js + Canvas
+
+## 我的工作流（给人看的）
+
+```
+开新会话 → /pickup → 干活 → /wrapup
+```
+
+| 命令 | 用途 |
+|------|------|
+| `/pickup` | 恢复上次状态（读 HANDOVER + git 对比） |
+| `/wrapup` | 收尾复盘（覆写 HANDOVER + 追加 PROGRESS + 日志） |
+| `/artist` `/game` `/review` `/verify` | 美术 / 数值 / 审查 / 验证 |
+
+**资产在哪:** `./CLAUDE.md`（AI规则） `./HANDOVER.md`（状态） `./PROGRESS.md`（时间线） `.claude/rules/pitfalls.md`（踩坑） `docs/wrapup-logs/`（记录） `docs/技术文档/`（资料）
+
+---
+
+## 项目概览
+
 > 观众发弹幕选阵营、刷礼物出兵，双方对战推城堡。
 
 ---

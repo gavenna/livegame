@@ -65,14 +65,14 @@ class GameEngine {
   // ============================================================
 
   start() {
-    logger.info('ENGINE', 'Starting game loop');
+    logger.info('[ENGINE] Starting game loop');
     this.startRound();
   }
 
   stop() {
     clearTimeout(this.roundTimer);
     clearInterval(this.tickTimer);
-    logger.info('ENGINE', 'Stopped');
+    logger.info('[ENGINE] Stopped');
   }
 
   /** 跳过 COUNTDOWN 直接开打 */
@@ -80,7 +80,7 @@ class GameEngine {
     clearTimeout(this.roundTimer);
     this.state = STATE.PLAYING;
     this.phaseStartedAt = Date.now();
-    logger.info('ENGINE', `Round ${this.round} — PLAYING`);
+    logger.info(`[ENGINE] Round ${this.round} — PLAYING`);
     this.pushState();
 
     this.tickTimer = setInterval(() => this.tick(), this.config.BATTLE_TICK_MS);
@@ -102,7 +102,7 @@ class GameEngine {
     this.startTime = Date.now();
     this.phaseStartedAt = Date.now();  // COUNTDOWN 阶段起点
 
-    logger.info('ENGINE', `Round ${this.round} — COUNTDOWN (${this.config.PREP_TIME_EFF / 1000}s)`);
+    logger.info(`[ENGINE] Round ${this.round} — COUNTDOWN (${this.config.PREP_TIME_EFF / 1000}s)`);
     this.pushState();
 
     this.roundTimer = setTimeout(() => {
@@ -120,8 +120,8 @@ class GameEngine {
     const winner = this.redTeam.castleHP > this.blueTeam.castleHP ? 'red'
       : this.blueTeam.castleHP > this.redTeam.castleHP ? 'blue' : 'draw';
 
-    logger.info('ENGINE', `Round ${this.round} — END (${duration}s, winner=${winner})`);
-    logger.info('ENGINE', `红方: ${this.redTeam.players.size}人 ${this.redTeam.castleHP}HP | 蓝方: ${this.blueTeam.players.size}人 ${this.blueTeam.castleHP}HP`);
+    logger.info(`[ENGINE] Round ${this.round} — END (${duration}s, winner=${winner})`);
+    logger.info(`[ENGINE] 红方: ${this.redTeam.players.size}人 ${this.redTeam.castleHP}HP | 蓝方: ${this.blueTeam.players.size}人 ${this.blueTeam.castleHP}HP`);
 
     // 积分结算
     this.settleScores(winner);
@@ -150,7 +150,7 @@ class GameEngine {
           if (event.castleDmg > 0) {
             const castleDmg = Math.round(this.config.CASTLE_HP * event.castleDmg);
             targetTeam.castleHP -= castleDmg;
-            logger.info('ENGINE', `${event.ownerName} 天神之怒! ${event.team}→${event.team === 'red' ? '蓝' : '红'}方 城堡-${castleDmg}HP`);
+            logger.info(`[ENGINE] ${event.ownerName} 天神之怒! ${event.team}→${event.team === 'red' ? '蓝' : '红'}方 城堡-${castleDmg}HP`);
           }
           if (event.slow > 0) {
             targetTeam.castleHP -= Math.round(event.damage * event.slow);
@@ -162,7 +162,7 @@ class GameEngine {
         case 'siege': {
           const targetTeam = event.team === 'red' ? this.blueTeam : this.redTeam;
           targetTeam.castleHP -= event.damage;
-          logger.info('ENGINE', `${event.ownerName} 攻城! ${event.team}→${event.team === 'red' ? '蓝' : '红'}方城堡 -${event.damage}HP`);
+          logger.info(`[ENGINE] ${event.ownerName} 攻城! ${event.team}→${event.team === 'red' ? '蓝' : '红'}方城堡 -${event.damage}HP`);
           this.pendingEvents.push(event);
           this.addStat('damageDealt', event.ownerId, event.damage);
           break;
@@ -184,7 +184,7 @@ class GameEngine {
     for (const cd of castleDamages) {
       const targetTeam = cd.target === 'red' ? this.redTeam : this.blueTeam;
       targetTeam.castleHP -= cd.damage;
-      logger.debug('ENGINE', `战线到城堡: 线${cd.lane} ${cd.target}方 -${cd.damage}HP`);
+      logger.debug(`[ENGINE] 战线到城堡: 线${cd.lane} ${cd.target}方 -${cd.damage}HP`);
     }
 
     // 检查城堡血量
@@ -194,7 +194,7 @@ class GameEngine {
     assert.castleHP(this.blueTeam.castleHP, 'blue');
 
     if (this.redTeam.castleHP <= 0 || this.blueTeam.castleHP <= 0) {
-      logger.info('ENGINE', `城堡摧毁 — 红:${this.redTeam.castleHP}HP 蓝:${this.blueTeam.castleHP}HP → 回合结束`);
+      logger.info(`[ENGINE] 城堡摧毁 — 红:${this.redTeam.castleHP}HP 蓝:${this.blueTeam.castleHP}HP → 回合结束`);
       this.endRound();
       return;
     }
@@ -270,7 +270,7 @@ class GameEngine {
         this.handleAdmin(msg.action);
         break;
       default:
-        logger.debug('ENGINE', `Unknown message type: ${msg.type}`);
+        logger.debug(`[ENGINE] Unknown message type: ${msg.type}`);
     }
   }
 
@@ -288,7 +288,7 @@ class GameEngine {
         name: playerName || playerId,
         joinedAt: Date.now(),
       });
-      logger.info('ENGINE', `${playerName || playerId} → ${team === 'red' ? '红方' : '蓝方'} (${targetTeam.players.size}人)`);
+      logger.info(`[ENGINE] ${playerName || playerId} → ${team === 'red' ? '红方' : '蓝方'} (${targetTeam.players.size}人)`);
     }
 
     this.ranking.getOrCreate(playerId);
@@ -300,11 +300,12 @@ class GameEngine {
 
     const cmd = this.config.DANMAKU_COMMANDS[text];
     if (!cmd) {
+      logger.info(`[DANMAKU] 弹幕: "${text}" (${playerName || playerId})`);
       this.pendingEvents.push({ type: 'danmaku_text', text, playerId, playerName, time: Date.now() });
       return;
     }
 
-    logger.debug('DANMAKU', `"${text}" → ${cmd} (${playerName || playerId})`);
+    logger.debug(`[DANMAKU] "${text}" → ${cmd} (${playerName || playerId})`);
 
     const team = this.getPlayerTeam(playerId);
     const actualTeam = team || (Math.random() < 0.5 ? 'red' : 'blue');
@@ -322,7 +323,7 @@ class GameEngine {
       case 'spawn_militia_3': {
         // D2: 冷却检查
         if (this.isOnCooldown(playerId, cmd)) {
-          logger.debug('DANMAKU', `"${text}" 冷却中 — ${playerName || playerId}`);
+          logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
           return;
         }
         this.setCooldown(playerId, cmd);
@@ -336,14 +337,14 @@ class GameEngine {
       case 'speed_boost': {
         // D2: 冷却检查
         if (this.isOnCooldown(playerId, cmd)) {
-          logger.debug('DANMAKU', `"${text}" 冷却中 — ${playerName || playerId}`);
+          logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
           return;
         }
         this.setCooldown(playerId, cmd);
         if (this.state === STATE.PLAYING) {
           this.applySpeedBoost(actualTeam, playerId);
           this.pendingEvents.push({ type: 'speed_boost', team: actualTeam, playerId, playerName, time: Date.now() });
-          logger.info('ENGINE', `${playerName || playerId} 吹响冲锋号! ${actualTeam}方全体加速 8s`);
+          logger.info(`[ENGINE] ${playerName || playerId} 吹响冲锋号! ${actualTeam}方全体加速 8s`);
         }
         break;
       }
@@ -352,9 +353,9 @@ class GameEngine {
 
   handleGift(troopKey, playerId, playerName) {
     assert.playerId(playerId, 'handleGift');
-    if (!troopKey) { logger.warn('GIFT', `troopKey 缺失 (player=${playerId})`); return; }
+    if (!troopKey) { logger.warn(`[GIFT] troopKey 缺失 (player=${playerId})`); return; }
     if (this.state !== STATE.PLAYING) {
-      logger.debug('GIFT', `${playerName || playerId} 送礼 ${troopKey} 被忽略 — 非战斗阶段 (state=${this.state})`);
+      logger.debug(`[GIFT] ${playerName || playerId} 送礼 ${troopKey} 被忽略 — 非战斗阶段 (state=${this.state})`);
       return;
     }
 
@@ -377,14 +378,14 @@ class GameEngine {
         text: `${playerName || playerId} 正在召唤 ${troopName}！`,
         time: Date.now(),
       });
-      logger.info('GIFT', `${playerName || playerId} 预告召唤 ${actualKey}`);
+      logger.info(`[GIFT] ${playerName || playerId} 预告召唤 ${actualKey}`);
 
       setTimeout(() => {
         const delayed = this.battle.spawnTroop(team, actualKey, playerId, playerName);
         if (delayed) {
           const giftScore = delayed.damage * this.config.SCORE.GIFT_MULTIPLIER;
           this.addStat('gifts', playerId, giftScore);
-          logger.info('GIFT', `${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${delayed.damage} 积分:+${giftScore})`);
+          logger.info(`[GIFT] ${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${delayed.damage} 积分:+${giftScore})`);
         }
       }, 1000);
     } else {
@@ -392,13 +393,13 @@ class GameEngine {
       if (troop) {
         const giftScore = troop.damage * this.config.SCORE.GIFT_MULTIPLIER;
         this.addStat('gifts', playerId, giftScore);
-        logger.info('GIFT', `${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
+        logger.info(`[GIFT] ${playerName || playerId} 送出 ${actualKey} → ${team}方 (伤害:${troop.damage} 积分:+${giftScore})`);
       }
     }
   }
 
   handleAdmin(action) {
-    logger.info('ENGINE', `Admin action: ${action} (state=${this.state})`);
+    logger.info(`[ENGINE] Admin action: ${action} (state=${this.state})`);
 
     switch (action) {
       case 'skip_countdown':
@@ -418,11 +419,11 @@ class GameEngine {
         break;
       case 'reset_rankings':
         this.ranking.reset();
-        logger.info('ENGINE', '排行榜已重置');
+        logger.info('[ENGINE] 排行榜已重置');
         this.pushState();
         break;
       default:
-        logger.warn('ENGINE', `Unknown admin action: ${action}`);
+        logger.warn(`[ENGINE] Unknown admin action: ${action}`);
     }
   }
 
@@ -479,10 +480,10 @@ class GameEngine {
           this.roundStats.gifts.get(pid) || 0,
         );
       }
-      logger.info('ENGINE', `Round ${this.round} 已写入 DB (id=${roundId})`);
+      logger.info(`[ENGINE] Round ${this.round} 已写入 DB (id=${roundId})`);
     }
 
-    logger.info('ENGINE', `MVP: ${mvp || 'none'} (+${this.config.SCORE.MVP_BONUS}), SVP: ${svp || 'none'} (+${this.config.SCORE.SVP_BONUS})`);
+    logger.info(`[ENGINE] MVP: ${mvp || 'none'} (+${this.config.SCORE.MVP_BONUS}), SVP: ${svp || 'none'} (+${this.config.SCORE.SVP_BONUS})`);
   }
 
   // ============================================================
@@ -597,7 +598,7 @@ class GameEngine {
         }
       }
       delete this.speedBoostTimers[team][boostKey];
-      logger.debug('ENGINE', `${team}方 加速效果结束`);
+      logger.debug(`[ENGINE] ${team}方 加速效果结束`);
     }, 8000);
 
     this.speedBoostTimers[team][boostKey] = timerId;
