@@ -71,6 +71,9 @@ const castleArrows = [];
 /** B10: 攻城碎石 { target, lane, time } */
 const castleDebris = [];
 
+/** B11: 城堡受击闪烁 { target, time } */
+const castleFlashes = [];
+
 /** C1: 事件播报 { text, time, color } */
 const eventBanners = [];
 
@@ -314,11 +317,6 @@ function processEvents(state) {
         siegeImpacts.push({ target: evt.team === 'red' ? 'blue' : 'red', time: now });
         if (window.audioEngine) window.audioEngine.playSiege();
         break;
-      case 'speed_boost':
-        dmText = `💨 ${evt.playerName} 吹响了冲锋号！`;
-        eventBanners.push({ text: dmText, time: now, color: '#88CCFF' });
-        if (window.audioEngine) window.audioEngine.playSpeedBoost();
-        break;
       case 'dragon_breath':
         // B7: 龙焰吐息
         dragonBreaths.push({ x: evt.x, lane: evt.lane, team: evt.team, time: now });
@@ -347,8 +345,9 @@ function processEvents(state) {
         if (window.audioEngine) window.audioEngine.playCastleHit();
         break;
       case 'soldier_attack_castle':
-        // B10: 单兵攻城碎石（士兵位置小爆发）
+        // B10: 单兵攻城碎石（士兵位置小爆发）+ B11: 城堡闪烁
         castleDebris.push({ target: evt.team === 'red' ? 'blue' : 'red', lane: evt.lane, time: now, x: evt.x, y: evt.y });
+        castleFlashes.push({ target: evt.team === 'red' ? 'blue' : 'red', time: now });
         if (window.audioEngine) window.audioEngine.playCastleHit();
         break;
       case 'comeback':
@@ -451,6 +450,11 @@ function updateEffects() {
     if (now - castleDebris[i].time > 500) castleDebris.splice(i, 1);
   }
 
+  // B11: 城堡受击闪烁（0.3s）
+  for (let i = castleFlashes.length - 1; i >= 0; i--) {
+    if (now - castleFlashes[i].time > 300) castleFlashes.splice(i, 1);
+  }
+
   // C1: 事件播报（2s）
   for (let i = eventBanners.length - 1; i >= 0; i--) {
     if (now - eventBanners[i].time > 2000) eventBanners.splice(i, 1);
@@ -531,6 +535,9 @@ function renderBattle(ctx, state) {
 
   // 攻城碎石
   drawCastleDebris(ctx);
+
+  // 城堡受击闪烁
+  drawCastleFlashes(ctx);
 
   // 攻城冲击
   drawSiegeImpacts(ctx, state);
@@ -1155,6 +1162,36 @@ function drawCastleDebris(ctx) {
       ctx.arc(cx, cy, progress * 40, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+/** B11: 城堡受击闪烁 — 被砍时短暂白黄闪光 */
+function drawCastleFlashes(ctx) {
+  var now = Date.now();
+  for (var i = 0; i < castleFlashes.length; i++) {
+    var cf = castleFlashes[i];
+    var age = now - cf.time;
+    var progress = age / 300;
+    var alpha = 1 - progress;
+    var castleX = cf.target === 'red' ? 90 : DESIGN_W - 90;
+    var castleY = DESIGN_H * 0.45;
+    // 双层辉光：内层亮白 + 外层扩散
+    var innerR = 30 + progress * 40;
+    var outerR = innerR + 40;
+    ctx.save();
+    // 外层扩散光晕
+    var outerGrad = ctx.createRadialGradient(castleX, castleY, innerR * 0.5, castleX, castleY, outerR);
+    outerGrad.addColorStop(0, 'rgba(255,220,100,' + (alpha * 0.6).toFixed(2) + ')');
+    outerGrad.addColorStop(1, 'rgba(255,100,50,0)');
+    ctx.fillStyle = outerGrad;
+    ctx.fillRect(castleX - outerR, castleY - outerR, outerR * 2, outerR * 2);
+    // 内层亮白闪光
+    var innerGrad = ctx.createRadialGradient(castleX, castleY, 0, castleX, castleY, innerR);
+    innerGrad.addColorStop(0, 'rgba(255,255,255,' + (alpha * 0.9).toFixed(2) + ')');
+    innerGrad.addColorStop(1, 'rgba(255,200,50,0)');
+    ctx.fillStyle = innerGrad;
+    ctx.fillRect(castleX - innerR, castleY - innerR, innerR * 2, innerR * 2);
+    ctx.restore();
   }
 }
 

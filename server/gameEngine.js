@@ -44,14 +44,11 @@ class GameEngine {
     // 本局统计
     this.roundStats = { kills: new Map(), damageDealt: new Map(), gifts: new Map() };
 
-    // D1: 加速计时器 { team: { playerId: timeoutId } }
-    this.speedBoostTimers = { red: {}, blue: {} };
-
     // D2: 指令冷却 { playerId: { command: lastUsedTime } }
     this.commandCooldowns = new Map();
 
     // D2: 冷却配置 (ms)
-    this.COOLDOWNS = { spawn_militia_3: 3000, speed_boost: 5000 };
+    this.COOLDOWNS = { spawn_militia_3: 3000, spawn_spearman_2: 3000, spawn_bowman_2: 3000, spawn_raider_2: 3000 };
 
     // 事件队列（本 tick 产生的事件，推给前端后清空）
     this.pendingEvents = [];
@@ -196,7 +193,14 @@ class GameEngine {
           break;
         }
         case 'castle_hit':
-        case 'soldier_attack_castle':
+        case 'soldier_attack_castle': {
+          const targetTeam = event.team === 'red' ? this.blueTeam : this.redTeam;
+          targetTeam.castleHP -= event.damage;
+          logger.debug(`[ENGINE] ${event.ownerName} 攻城! ${event.team}→${event.team === 'red' ? '蓝' : '红'}方城堡 -${event.damage}HP`);
+          this.pendingEvents.push(event);
+          this.addStat('damageDealt', event.ownerId, event.damage);
+          break;
+        }
         case 'comeback':
         case 'chest_open':
         case 'chest_reveal':
@@ -205,14 +209,6 @@ class GameEngine {
           break;
         }
       }
-    }
-
-    // 战线到城堡 → 造成伤害（三线独立判定）
-    const castleDamages = this.battle.getCastleDamage();
-    for (const cd of castleDamages) {
-      const targetTeam = cd.target === 'red' ? this.redTeam : this.blueTeam;
-      targetTeam.castleHP -= cd.damage;
-      logger.debug(`[ENGINE] 战线到城堡: 线${cd.lane} ${cd.target}方 -${cd.damage}HP`);
     }
 
     // 检查城堡血量
@@ -410,38 +406,43 @@ class GameEngine {
         this.pendingEvents.push({ type: 'danmaku_text', text: `${playerName || playerId} 加入了霜狼联盟！`, playerId, playerName, time: Date.now() });
         break;
       case 'spawn_militia_3': {
-        if (this.isOnCooldown(playerId, cmd)) {
-          logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
-          return;
-        }
-        this.setCooldown(playerId, cmd);
+        if (!this._checkSpawnCooldown(playerId, cmd, playerName)) return;
         if (this.state === STATE.PLAYING) {
-          this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
-          this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
-          this.battle.spawnTroop(actualTeam, 'militia', playerId, playerName);
+          this._spawnTroops(actualTeam, 'militia', 3, playerId, playerName);
           const name = playerName || playerId;
-          let spawnMsg;
-          if (displayText) {
-            spawnMsg = displayText;
-          } else if (text === '666') {
-            spawnMsg = `${name} 为主播助威！⚔ 民兵出击`;
-          } else {
-            spawnMsg = `${name} 号召民兵出击！`;  // '杀'
-          }
+          let spawnMsg = displayText || `${name} 号召民兵出击！`;
+          if (!displayText && text === '666') spawnMsg = `${name} 为主播助威！⚔ 民兵出击`;
           this.pendingEvents.push({ type: 'danmaku_text', text: spawnMsg, playerId, playerName, time: Date.now() });
         }
         break;
       }
-      case 'speed_boost': {
-        if (this.isOnCooldown(playerId, cmd)) {
-          logger.debug(`[DANMAKU] "${text}" 冷却中 — ${playerName || playerId}`);
-          return;
-        }
-        this.setCooldown(playerId, cmd);
+      case 'spawn_spearman_2': {
+        if (!this._checkSpawnCooldown(playerId, cmd, playerName)) return;
         if (this.state === STATE.PLAYING) {
-          this.applySpeedBoost(actualTeam, playerId);
-          this.pendingEvents.push({ type: 'speed_boost', team: actualTeam, playerId, playerName, time: Date.now() });
-          logger.info(`[ENGINE] ${playerName || playerId} 吹响冲锋号! ${actualTeam}方全体加速 8s`);
+          this._spawnTroops(actualTeam, 'spearman', 2, playerId, playerName);
+          const name = playerName || playerId;
+          const spawnMsg = displayText || `${name} 派出矛兵列阵！`;
+          this.pendingEvents.push({ type: 'danmaku_text', text: spawnMsg, playerId, playerName, time: Date.now() });
+        }
+        break;
+      }
+      case 'spawn_bowman_2': {
+        if (!this._checkSpawnCooldown(playerId, cmd, playerName)) return;
+        if (this.state === STATE.PLAYING) {
+          this._spawnTroops(actualTeam, 'bowman', 2, playerId, playerName);
+          const name = playerName || playerId;
+          const spawnMsg = displayText || `${name} 派出弓兵放箭！`;
+          this.pendingEvents.push({ type: 'danmaku_text', text: spawnMsg, playerId, playerName, time: Date.now() });
+        }
+        break;
+      }
+      case 'spawn_raider_2': {
+        if (!this._checkSpawnCooldown(playerId, cmd, playerName)) return;
+        if (this.state === STATE.PLAYING) {
+          this._spawnTroops(actualTeam, 'raider', 2, playerId, playerName);
+          const name = playerName || playerId;
+          const spawnMsg = displayText || `${name} 派出突袭兵冲锋！`;
+          this.pendingEvents.push({ type: 'danmaku_text', text: spawnMsg, playerId, playerName, time: Date.now() });
         }
         break;
       }
@@ -727,37 +728,6 @@ class GameEngine {
     broadcast(state);
   }
 
-  // === D1: 加速系统 ===
-
-  /** 应用加速效果（8s 后自动恢复） */
-  applySpeedBoost(team, playerId) {
-    const boostKey = `${playerId}_${Date.now()}`;
-    const origSpeeds = new Map();
-
-    for (const t of this.battle.troops) {
-      if (t.animState === 'death') continue;
-      if (t.team === team) {
-        origSpeeds.set(t.id, t.speed);
-        t.speed = t.speed * 1.3;
-      }
-    }
-
-    if (origSpeeds.size === 0) return;
-
-    // 8s 后恢复
-    const timerId = setTimeout(() => {
-      for (const t of this.battle.troops) {
-        if (t.team === team && origSpeeds.has(t.id)) {
-          t.speed = origSpeeds.get(t.id);
-        }
-      }
-      delete this.speedBoostTimers[team][boostKey];
-      logger.debug(`[ENGINE] ${team}方 加速效果结束`);
-    }, 8000);
-
-    this.speedBoostTimers[team][boostKey] = timerId;
-  }
-
   // === D2: 指令冷却 ===
 
   isOnCooldown(playerId, command) {
@@ -774,6 +744,23 @@ class GameEngine {
       this.commandCooldowns.set(playerId, {});
     }
     this.commandCooldowns.get(playerId)[command] = Date.now();
+  }
+
+  /** 检查出兵冷却，返回 false=冷却中/已阻断 */
+  _checkSpawnCooldown(playerId, cmd, playerName) {
+    if (this.isOnCooldown(playerId, cmd)) {
+      logger.debug(`[DANMAKU] "${cmd}" 冷却中 — ${playerName || playerId}`);
+      return false;
+    }
+    this.setCooldown(playerId, cmd);
+    return true;
+  }
+
+  /** 批量出兵 */
+  _spawnTroops(team, troopKey, count, playerId, playerName) {
+    for (let i = 0; i < count; i++) {
+      this.battle.spawnTroop(team, troopKey, playerId, playerName);
+    }
   }
 }
 

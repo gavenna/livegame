@@ -24,3 +24,14 @@
 - 音效库路径记忆：D:\tmp\游戏动画音效全集\游戏动画音效全集
 - 5个新音效槽位 + 环境音层（ambientGain）
 - Memory：sound-library-path.md
+
+## 2026-07-19
+- 城堡伤害修复：战线改纯视觉指示器，士兵必须攻到城下才掉血（删除 getCastleDamage()，soldier_attack_castle 带真实伤害）
+- 城堡受击闪烁效果（B11: 双层辉光，300ms 衰减）
+- 免费兵种克制链：新增矛兵/弓兵/突袭兵，4 兵种闭环（民兵→突袭→弓→矛→民兵）
+- 弹幕指令：枪/射/袭/冲，各出 2 个对应兵种
+- AI 精灵图生成：spearman.png/bowman.png/raider.png（agnes-image-2.1-flash + rembg）
+- 日志双写：取消 NODE_ENV 分档，始终终端+文件
+- 代码清理：删除 speed_boost 系统
+- Art Bible 更新：v1.2 新增 3 兵种设计规范
+- 文档更新：游戏设计.md §3.1/§3.3 同步

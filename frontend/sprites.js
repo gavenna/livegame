@@ -8,6 +8,9 @@
 /** 显示尺寸（游戏世界中的像素大小） */
 const SPRITE_DEFS = {
   militia:     { w: 24, h: 32, label: '民兵' },
+  spearman:    { w: 22, h: 38, label: '矛兵' },      // 长枪，瘦高
+  bowman:      { w: 22, h: 30, ranged: true, label: '弓兵' },
+  raider:      { w: 26, h: 28, fast: true, label: '突袭兵' },  // 快速突击
   swordsman:   { w: 28, h: 36, label: '剑士' },
   knight:      { w: 48, h: 40, mounted: true, label: '骑士' },
   archer:      { w: 24, h: 36, ranged: true, label: '弓手' },
@@ -22,7 +25,8 @@ const SPRITE_DEFS = {
 };
 
 const FALLBACK_COLORS = {
-  militia:     '#8B7355', swordsman: '#C0C0C0', knight:    '#4169E1',
+  militia:     '#8B7355', spearman:  '#CD853F', bowman:    '#6B8E23',
+  raider:      '#B22222', swordsman: '#C0C0C0', knight:    '#4169E1',
   archer:      '#228B22', catapult:  '#8B4513', royalGuard:'#FFD700',
   giant:       '#A0522D', dragonKnight:'#FF4500', fireArrow: '#FF6347',
   wrathOfGod:  '#FFD700', batteringRam:'#8B4513', warChest:  '#DAA520',

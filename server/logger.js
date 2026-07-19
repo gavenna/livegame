@@ -13,9 +13,11 @@
  *   log.info('Client connected');
  *
  * 配置:
- *   NODE_ENV=production  → JSON 格式写文件 + 错误单独文件
- *   其他                  → pino-pretty 彩色输出到终端
- *   LOG_LEVEL=debug       → 覆盖日志级别
+ *   LOG_LEVEL=debug → 覆盖日志级别（默认 debug）
+ *
+ * 输出（双写，始终启用）:
+ *   终端: pino-pretty 人眼可读格式
+ *   文件: server/logs/combined.log（JSON，事后 grep/排查用）
  */
 
 const pino = require('pino');
@@ -28,19 +30,16 @@ if (process.platform === 'win32') {
   if (stderr.setDefaultEncoding) stderr.setDefaultEncoding('utf8');
 }
 
-const isProd = process.env.NODE_ENV === 'production';
-const level = process.env.LOG_LEVEL || (isProd ? 'info' : 'debug');
+const level = process.env.LOG_LEVEL || 'debug';
 
 const logger = pino({
   level,
   timestamp: pino.stdTimeFunctions.isoTime,
 }, pino.transport({
-  targets: isProd
-    ? [
-        { target: 'pino/file', level: 'info', options: { destination: path.join(__dirname, 'logs', 'combined.log'), mkdir: true } },
-        { target: 'pino/file', level: 'error', options: { destination: path.join(__dirname, 'logs', 'error.log'), mkdir: true } },
-      ]
-    : [{ target: 'pino-pretty', options: { colorize: false, translateTime: 'yyyy-mm-dd HH:MM:ss', ignore: 'pid,hostname' } }],
+  targets: [
+    { target: 'pino-pretty', level, options: { colorize: false, translateTime: 'yyyy-mm-dd HH:MM:ss', ignore: 'pid,hostname' } },
+    { target: 'pino/file', level, options: { destination: path.join(__dirname, 'logs', 'combined.log'), mkdir: true } },
+  ],
 }));
 
 module.exports = logger;

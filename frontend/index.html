@@ -190,11 +190,16 @@
       <button class="btn-blue" onclick="join('blue')">🔵 加入霜狼</button>
     </div>
 
-    <h3>免费指令</h3>
+    <h3>免费指令（克：民兵→突袭→弓→矛→民兵）</h3>
     <div class="row">
-      <button class="btn-free" onclick="dm('杀')">杀 → 3民兵</button>
-      <button class="btn-free" onclick="dm('冲')">冲 → 加速</button>
-      <button class="btn-free" onclick="dm('666')">666 → 3民兵</button>
+      <button class="btn-free" onclick="dm('杀')" title="克突袭兵">杀 → ×3民兵</button>
+      <button class="btn-free" onclick="dm('枪')" title="克民兵">枪 → ×2矛兵</button>
+      <button class="btn-free" onclick="dm('射')" title="克矛兵">射 → ×2弓兵</button>
+    </div>
+    <div class="row">
+      <button class="btn-free" onclick="dm('袭')" title="克弓兵">袭 → ×2突袭兵</button>
+      <button class="btn-free" onclick="dm('冲')" title="克弓兵">冲 → ×2突袭兵</button>
+      <button class="btn-free" onclick="dm('666')">666 → ×3民兵</button>
     </div>
 
     <h3>入门兵种 1~5¥</h3>

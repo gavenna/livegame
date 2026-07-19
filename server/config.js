@@ -69,8 +69,11 @@ module.exports = {
   // 每个兵种 = 一个付费档位
   // HP 上调 5x，伤害下调 2x（高费兵），确保战斗时长足够展示动画
   TROOPS: {
-    // 免费层
-    militia:  { name: '民兵',   damage: 1,   hp: 50,  speed: 1.0, cost: 0,     attackRange: 55,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: [] },
+    // 免费层（弹幕指令触发）
+    militia:  { name: '民兵',   damage: 1,   hp: 50,  speed: 1.0, cost: 0,     attackRange: 55,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['raider'] },
+    spearman: { name: '矛兵',   damage: 2,   hp: 45,  speed: 0.9, cost: 0,     attackRange: 65,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
+    bowman:   { name: '弓兵',   damage: 1.5, hp: 30,  speed: 1.0, cost: 0,     attackRange: 200, showAvatar: false, avatarSize: 0,    avatarTime: 0,    ranged: true,  counters: ['spearman'] },
+    raider:   { name: '突袭兵', damage: 2.5, hp: 35,  speed: 2.2, cost: 0,     attackRange: 55,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['bowman'] },
     // 入门层 (~1元)
     swordsman:{ name: '剑士',   damage: 3,   hp: 150, speed: 1.2, cost: 1,     attackRange: 64,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['militia'] },
     knight:   { name: '骑士',   damage: 12,  hp: 400, speed: 2.0, cost: 5,     attackRange: 58,  showAvatar: false, avatarSize: 0,    avatarTime: 0,    counters: ['swordsman', 'archer'] },
@@ -127,9 +130,12 @@ module.exports = {
     '加蓝': 'join_blue',
     '霜狼': 'join_blue',
     '杀': 'spawn_militia_3',
+    '枪': 'spawn_spearman_2',
+    '射': 'spawn_bowman_2',
+    '袭': 'spawn_raider_2',
+    '冲': 'spawn_raider_2',
     '666': 'spawn_militia_3',
     '赞': 'spawn_militia_3',    // 抖音点赞映射
-    '冲': 'speed_boost',
   },
 
   // === 抖音礼物 ID 映射 ===

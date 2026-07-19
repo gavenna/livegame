@@ -180,10 +180,9 @@ class Battle {
       if (t.animState === 'death') continue;
       if (t.speed <= 0) continue;
 
-      // 检查是否到达敌方城堡（前线推到最大 + 士兵在城堡射程内）
+      // 检查是否到达敌方城堡（士兵在城堡射程内即可）
       const enemyCastleX = t.team === 'red' ? CANVAS_W - 90 : 90;
-      const atEnemyCastle = Math.abs(t.x - enemyCastleX) < 120
-        && Math.abs(this.frontLines[t.lane]) >= bal.FRONTLINE_MAX;
+      const atEnemyCastle = Math.abs(t.x - enemyCastleX) < 120;
 
       // 检查前方是否有同线敌人（远程用远程距离，近战用近战距离）
       const enemies = allAlive.filter(e => e.team !== t.team && e.lane === t.lane);
@@ -411,13 +410,12 @@ class Battle {
       }
     }
 
-    // === 7. 士兵攻城反馈 ===
+    // === 7. 士兵攻城（到达城堡射程内 + 攻击状态 → 造成实际伤害） ===
     const now7 = Date.now();
     for (const t of this.troops) {
       if (t.animState === 'death' || t.hp <= 0) continue;
       const enemyCastleX = t.team === 'red' ? CANVAS_W - 90 : 90;
       if (Math.abs(t.x - enemyCastleX) < 120
-          && Math.abs(this.frontLines[t.lane]) >= bal.FRONTLINE_MAX
           && t.animState === 'attack') {
         if (!t._lastCastleAttack || now7 - t._lastCastleAttack > 500) {
           t._lastCastleAttack = now7;
@@ -427,6 +425,9 @@ class Battle {
             lane: t.lane,
             x: t.x,
             y: t.y,
+            damage: t.damage,
+            ownerId: t.ownerId,
+            ownerName: t.ownerName,
             time: now7,
           });
         }
@@ -484,38 +485,6 @@ class Battle {
       troops: this.troops,
       events: tickEvents,
     };
-  }
-
-  /** 获取战线推进到城堡时的伤害（三线独立判定，由 GameEngine 调用） */
-  getCastleDamage() {
-    const bal = config.BALANCE;
-    const results = [];
-
-    for (let i = 0; i < LANE_COUNT; i++) {
-      const absFL = Math.abs(this.frontLines[i]);
-      if (absFL >= bal.FRONTLINE_MAX) {
-        const dmg = bal.CASTLE_DMG_PER_TICK_LANE;
-        const rebound = bal.FRONTLINE_MAX * 0.3;
-        const oldFL = this.frontLines[i];
-        this.frontLines[i] = Math.sign(this.frontLines[i]) * (bal.FRONTLINE_MAX - rebound);
-        const target = this.frontLines[i] > 0 ? 'blue' : 'red';
-        logger.info(`[BATTLE] 战线到城堡! 线${i} ${target === 'blue' ? '红→蓝' : '蓝→红'}方城堡 -${dmg}HP (frontLine=${Math.round(oldFL)}→${Math.round(this.frontLines[i])})`);
-        this.events.push({
-          type: 'castle_hit',
-          target,
-          lane: i,
-          damage: dmg,
-          time: Date.now(),
-        });
-        results.push({
-          target,
-          damage: dmg,
-          lane: i,
-        });
-      }
-    }
-
-    return results;  // 空数组或无-多条伤害记录
   }
 
   /** 计算双方当前总伤害输出 */
