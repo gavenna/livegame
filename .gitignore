@@ -47,6 +47,10 @@ assets/sprites/*.psd
 assets/sprites/*.ai
 frontend/assets/sprites/
 
+# External tools (compiled binaries)
+tools/
+vendor/
+
 # Audio (user-managed, large binary files)
 *.mp3
 *.wav

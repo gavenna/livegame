@@ -138,6 +138,8 @@ if (gen !== genRef.current) return; // 过期丢弃
 
 **修复/预防**：兵种属性只存 server 端 `config.js`，前端通过 WS 获取。或者如果前端需要本地副本，新增兵种/改属性时 `grep -rn` 确认没有硬编码残留。类似 waifu-agent 的 TTS 双端同步问题。
 
+> **2026-07-19 再次验证**: 新增矛兵/弓兵/突袭兵时，在 config.js 加了定义但在 sprites.js 漏了 SPRITE_DEFS + FALLBACK_COLORS，画面无显示。confirm 了此坑的持续性。详见 [[new-troop-checklist]]。
+
 ---
 
 ## 流程纪律
@@ -333,3 +335,34 @@ if (gen !== genRef.current) return; // 过期丢弃
 2. 改完后必须 `node --check` 逐个文件验证
 3. 优先改 template literal 版本（`\`[TAG] msg\``），它兼容变量和纯文本
 4. 用 `grep` 找出所有 `logger.` 行，确认没有两个相邻单引号字符串
+
+---
+
+### G12. douyinLive 部分直播间需要登录态 Cookie
+
+**症状**：douyinLive 连接后 5-7 秒断连，日志显示 `ROOM_CHECK_FAILED` / `status_code=4003034`。但公开大直播间（如 README 示例房间号）不需要 cookie 也能正常连接。
+
+**根因**：个人/小型直播间调用 Douyin web/enter API 需要登录态。`document.cookie` 拿不到 `sessionid`（HttpOnly），必须在浏览器 F12 → Network → Request Headers 复制完整 Cookie 头。
+
+**哪类 agent 会踩**：任何配置 douyinLive 的
+
+**修复/预防**：
+1. 先不用 cookie 试公开直播间 → 确认 douyinLive 本身可用
+2. 如果报 4003034 → 需要 Cookie：F12 → Network → 找请求 → 复制 Cookie 整行
+3. 关键 cookie：`sessionid`、`sid_guard`、`ttwid`（缺一不可）
+4. `document.cookie` 不包含 HttpOnly cookie → 不要用 Console 方式提取
+
+---
+
+### G13. `@dycast/core` DyCast 类不能在 Node.js 直接使用
+
+**症状**：Node.js 中 `require('@dycast/core')` 后调用 `new DyCast()` 报 `ReferenceError: location is not defined`。
+
+**根因**：`DyCast` 类的 `BASE_URL` 使用了 `location.origin`（浏览器 API），WebSocket 使用浏览器原生 `WebSocket`。`@dycast/core` 的 `server-only` 导出仅包含代理服务器 `DyCastServer`。
+
+**哪类 agent 会踩**：任何想在 Node.js 后端用 `@dycast/core` 直连抖音的
+
+**修复/预防**：
+1. 后端方案用 douyinLive (Go 编译的独立代理)，不要用 `@dycast/core`
+2. `@dycast/core` 适合浏览器端场景（Vue/React 前端通过 DyCastServer 代理连接）
+3. 如果非要用 `@dycast/core` 的工具函数（`getLiveInfo`、`getSignature`、各种 `decode*`），可单独导入，但需自建 WebSocket 连接层

@@ -6,6 +6,21 @@
 
 在真正的游戏团队中，2D Game Artist 不是一个"画图的工具人"，而是一个**视觉品质的把关者**。你的产出不是"14 张图片"，而是"一套风格统一、可直接在游戏里使用的精灵图素材库"。
 
+## 新增兵种 checklist
+
+当 config.js 新增兵种时，必须按以下顺序执行，禁止跳过任何一步：
+
+```
+1. config.js TROOPS + DANMAKU_COMMANDS
+2. sprites.js SPRITE_DEFS + FALLBACK_COLORS（颜色仅供回退标识，不能当正式美术）
+3. Art Bible §4.2 补兵种设计规范
+4. API 生成精灵图（agnes-image-2.1-flash）
+5. rembg 去背景 → assets/sprites/{key}.png
+6. 前端 index.html 控制面板按钮（如有新弹幕指令）
+```
+
+> ⚠️ **禁止手绘 fallback 当精灵图**。所有兵种最终美术必须走 AI 生成 + rembg 流程。
+
 ## 工作流程
 
 ```

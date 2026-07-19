@@ -35,3 +35,10 @@
 - 代码清理：删除 speed_boost 系统
 - Art Bible 更新：v1.2 新增 3 兵种设计规范
 - 文档更新：游戏设计.md §3.1/§3.3 同步
+
+## 2026-07-20
+- 可遇AI → douyinLive 迁移：编译 Go 代理 (`tools/douyinLive.exe`)，重写 `douyin.js` 连接层 + 格式映射
+- douyinLive 调试：确定房间号 `642238215421`、解决 4003034 鉴权（需 HttpOnly sessionid cookie）
+- Cookie 配置流程简化：两个字段 `roomId` + `cookie` 直填 `secrets.json`，废弃 Playwright 自动化方案
+- 项目清理：删除 @dycast/core、playwright、better-sqlite3 未使用依赖；gitignore 加 tools/ vendor/
+- 踩坑：document.cookie 拿不到 HttpOnly sessionid → 必须从 Network 标签复制完整 Cookie 头

@@ -52,8 +52,33 @@ else {
 # Check Douyin config
 $douyinEnabled = $secrets.douyin.enabled
 
+$douyinLiveProc = $null
 $douyinProc = $null
 if ($douyinEnabled -eq $true) {
+  $douyinLivePath = "$root\tools\douyinLive.exe"
+  $douyinLivePort = 1088
+  $douyinConfigPath = "$root\tools\douyinLive.yaml"
+  if (Test-Path $douyinLivePath) {
+    # Generate config.yaml from secrets.json
+    $douyinCookie = $secrets.douyin.cookie
+    if ($douyinCookie) {
+      @"
+port: "$douyinLivePort"
+log:
+  level: "info"
+cookie:
+  douyin: "$douyinCookie"
+"@ | Out-File -FilePath $douyinConfigPath -Encoding utf8
+      Write-Host "[OK] douyinLive config generated" -ForegroundColor Gray
+    }
+    $douyinLiveProc = Start-Process -FilePath $douyinLivePath -ArgumentList "--config $douyinConfigPath" -NoNewWindow -PassThru
+    Write-Host "[OK] douyinLive proxy :$douyinLivePort (PID $($douyinLiveProc.Id))" -ForegroundColor Green
+    Start-Sleep 2
+  }
+  else {
+    Write-Host "[WARN] douyinLive.exe not found at $douyinLivePath, skip" -ForegroundColor Yellow
+  }
+
   Start-Sleep 1
   $douyinProc = Start-Process -FilePath "node" -ArgumentList "server/danmaku/douyin.js" -NoNewWindow -PassThru
   Write-Host "[OK] Douyin adapter (PID $($douyinProc.Id))" -ForegroundColor Green
@@ -72,6 +97,7 @@ try {
   $serverProc.WaitForExit()
   if ($frontendProc) { $frontendProc.WaitForExit() }
   if ($relayProc) { $relayProc.WaitForExit() }
+  if ($douyinLiveProc) { $douyinLiveProc.WaitForExit() }
   if ($douyinProc) { $douyinProc.WaitForExit() }
 }
 catch {
@@ -79,5 +105,6 @@ catch {
   if (!$serverProc.HasExited) { $serverProc.Kill() }
   if ($frontendProc -and !$frontendProc.HasExited) { $frontendProc.Kill() }
   if ($relayProc -and !$relayProc.HasExited) { $relayProc.Kill() }
+  if ($douyinLiveProc -and !$douyinLiveProc.HasExited) { $douyinLiveProc.Kill() }
   if ($douyinProc -and !$douyinProc.HasExited) { $douyinProc.Kill() }
 }

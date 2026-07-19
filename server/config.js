@@ -156,7 +156,7 @@ module.exports = {
 
   // === 抖音适配器配置 ===
   DOUYIN_ADAPTER: {
-    TOOL_WS_URL: 'ws://localhost:12011', // 可遇AI WebSocket 地址
+    PROXY_WS_URL: 'ws://localhost:1088', // douyinLive 代理地址
     LIKE_COOLDOWN_MS: 1000,         // 点赞冷却（单用户 ms）
     AUTO_JOIN_ON_ENTER: true,       // 进房自动加入随机阵营
     ENTER_JOIN_CHANCE: 0,           // 进房自动加入概率（0=全加入，0.5=50%）
