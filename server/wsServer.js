@@ -12,8 +12,9 @@ const { WebSocketServer } = require('ws');
 const logger = require('./logger');
 const assert = require('./assert');
 
-const FRONTEND_DIR = path.resolve(__dirname, '..', 'frontend');
-const ASSETS_DIR = path.resolve(__dirname, '..', 'assets');
+const baseDir = __dirname.endsWith('server') ? path.resolve(__dirname, '..') : __dirname;
+const FRONTEND_DIR = path.resolve(baseDir, 'frontend');
+const ASSETS_DIR = path.resolve(baseDir, 'assets');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -92,7 +93,7 @@ function onMessage(handler) {
  */
 function startWSServer(port) {
   const server = http.createServer(serveStatic);
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
   server.listen(port, () => {
     logger.info(`[WS] HTTP + WebSocket on http://localhost:${port}`);
@@ -138,12 +139,12 @@ function setupConnections(wss) {
     logger.info(`[WS] Client connected. Total: ${clients.size + 1}`);
     clients.add(ws);
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       clients.delete(ws);
       for (const [pid, conn] of playerConns) {
         if (conn === ws) { playerConns.delete(pid); break; }
       }
-      logger.info(`[WS] Client disconnected. Total: ${clients.size}`);
+      logger.info(`[WS] Client disconnected. Total: ${clients.size} code=${code || '?'} reason=${reason || '?'}`);
     });
 
     ws.on('error', (err) => {

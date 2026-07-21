@@ -42,3 +42,60 @@
 - Cookie 配置流程简化：两个字段 `roomId` + `cookie` 直填 `secrets.json`，废弃 Playwright 自动化方案
 - 项目清理：删除 @dycast/core、playwright、better-sqlite3 未使用依赖；gitignore 加 tools/ vendor/
 - 踩坑：document.cookie 拿不到 HttpOnly sessionid → 必须从 Network 标签复制完整 Cookie 头
+
+## 2026-07-20~21
+
+### 打包分发
+- better-sqlite3 → sql.js (WASM)：消除原生 C++ 模块，17 玩家/167 局无损迁移
+- 日志简化：pino → 自研 logger（`server/logger.js`），无 worker thread，SEA 兼容
+- SEA 单文件 exe：`build.js` 一键构建，sql.js WASM base64 内嵌，游戏 exe ~89MB
+- 工具箱桌面应用：Node.js HTTP + 浏览器 UI，三 Tab（控制台/设置/工具），实时日志流
+- douyin.js 集成进 game exe：游戏启动时自动检测 secrets.json 并拉起抖音适配器
+- Inno Setup 安装包：`dist/war-danmaku-setup-v1.0.exe` (95 MB)
+- 项目专属 `/wrapup` skill（`.claude/skills/wrapup/SKILL.md`）
+
+### Tauri v2 工具箱（进行中）
+- Rust 后端已写：8 个 Tauri 命令（进程管理/文件读写/系统操作）
+- 前端 HTML/CSS/JS 准备就绪，待 `@tauri-apps/api` invoke 适配
+- 未编译测试（`cargo build` 待跑）
+
+### 踩坑
+- `better-sqlite3` 误删 → 上次清理依赖时当作"未使用"删了，实际 `server/db.js` 还在用，server 启动即崩且日志还没写
+- SEA 路径适配：`__dirname` 在 SEA 模式 = exe 目录而非 `server/`，3 个文件需要 `baseDir` 逻辑
+- douyin.js SEA 路径 fix 第一次用 `endsWith('danmaku')` 误判（项目名也以此结尾），改为 `endsWith('server/danmaku')`
+- Chrome `--app` 模式 → 前端 JS 不执行，原因不明，改为普通浏览器打开
+- build.js 中间产物残留（`dist/war-danmaku.exe`、`dist/bundle.js` 等），加了末尾清理
+
+## 2026-07-21
+
+### 单 exe 架构合并
+- `server/index.js` 合入工具箱全部功能：:3000 OBS画面 + :8760 管理面板
+- 删独立 toolbox exe，`build.js` 只构建一个 exe + 静态文件
+- 控制面板三个独立按钮：启动游戏 / 启动抖音 / 启动B站
+- "全部停止"全停干净：引擎 reset + 适配器 shutdown + 杀 douyinLive 进程
+
+### B站 relay Node.js 重写
+- `server/danmaku/bilibili.js` — 直连 B站 WebSocket 协议，消除 Python 依赖
+- 重连限制：最多 5 次，递增间隔
+
+### 日志系统强化
+- `logger.onLog` 回调 → 所有模块日志自动进面板环缓冲
+- 面板加日志来源过滤：全部/抖音/B站/游戏
+- 日志区可选中复制（之前全局 `user-select:none` 阻止）
+
+### 适配器启停控制
+- `douyin.js` / `bilibili.js` 去 `process.exit()`，导出 start/stop/isRunning
+- `stop()` 设 `shutdown=true` 彻底阻止重连
+- GameEngine 新增 `reset()` 方法
+
+### Tauri v2 工具箱
+- Rust 后端 + 前端已写，`npx tauri build --debug` 编译通过
+- 当前环境缺 WebView2 运行时，保留代码备用
+
+### 踩坑
+- WS 每 5 秒断连循环：`app.js` 三个 `setTimeout(connectWS)` 互相冲突 → 单一定时器修复
+- `cargo build --release` 不打包前端 → Tauri 需用 `npx tauri build`
+- B站重连无限制刷屏 → 加 5 次上限 + 递增间隔
+- "全部停止"没停游戏引擎 → 补 `engine.stop()` + `reset()`
+- `/api/start-douyin` 只 spawn douyinLive 没启适配器 → 补 `douyin.start()`
+- `pollStatus` 用适配器状态判 UI → 游戏跑着但适配器没开就切 offline → 改用 `s.game`

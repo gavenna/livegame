@@ -83,9 +83,7 @@ class Ranking {
   reset() {
     this.players.clear();
     if (this.db) {
-      this.db.db.exec('DELETE FROM round_players');
-      this.db.db.exec('DELETE FROM rounds');
-      this.db.db.exec('DELETE FROM players');
+      this.db.deleteAll();
     }
   }
 

@@ -80,7 +80,20 @@ class GameEngine {
   stop() {
     clearTimeout(this.roundTimer);
     clearInterval(this.tickTimer);
+    this.roundTimer = null;
+    this.tickTimer = null;
+    this.state = 'STOPPED';
     logger.info('[ENGINE] Stopped');
+  }
+
+  reset() {
+    this.stop();
+    this.round = 0;
+    this.red = { players: new Map(), castleHP: this.config.CASTLE_HP, troops: [] };
+    this.blue = { players: new Map(), castleHP: this.config.CASTLE_HP, troops: [] };
+    this.pendingEvents = [];
+    this.state = 'STOPPED';
+    logger.info('[ENGINE] Reset to initial state');
   }
 
   /** 跳过 COUNTDOWN 直接开打 */

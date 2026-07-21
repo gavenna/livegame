@@ -1,45 +1,76 @@
 /**
- * 日志模块 — Pino 封装
+ * 轻量日志模块 — 无依赖，纯同步 I/O
  *
  * 用法:
  *   const logger = require('./logger');
  *   logger.info('Client connected. Total: %d', count);
- *   logger.debug('Tick frontLine=%d', fl);
- *   logger.warn('Gift ignored: not PLAYING');
- *   logger.error('Client error: %s', err.message);
+ *   logger.child({ module: 'wsServer' });
  *
- *   需要模块标识时:
- *   const log = logger.child({ module: 'wsServer' });
- *   log.info('Client connected');
- *
- * 配置:
- *   LOG_LEVEL=debug → 覆盖日志级别（默认 debug）
- *
- * 输出（双写，始终启用）:
- *   终端: pino-pretty 人眼可读格式
- *   文件: server/logs/combined.log（JSON，事后 grep/排查用）
+ * 可选: 设置 onLog 回调将日志转发到面板环缓冲
+ *   logger.onLog = (level, msg) => { ringBuffer.push({ level, msg }); };
  */
 
-const pino = require('pino');
+const fs = require('fs');
 const path = require('path');
 
-// Windows 控制台默认 GBK，Pino 输出 UTF-8，必须统一编码
-if (process.platform === 'win32') {
-  const { stdout, stderr } = process;
-  if (stdout.setDefaultEncoding) stdout.setDefaultEncoding('utf8');
-  if (stderr.setDefaultEncoding) stderr.setDefaultEncoding('utf8');
+const LOG_DIR = path.join(__dirname, 'logs');
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch (e) { /* ok */ }
+
+const LOG_FILE = path.join(LOG_DIR, 'combined.log');
+
+function ts() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-const level = process.env.LOG_LEVEL || 'debug';
+function writeln(text) {
+  try { fs.appendFileSync(LOG_FILE, text + '\n'); } catch (e) { /* 静默：不因日志写盘失败崩进程 */ }
+}
 
-const logger = pino({
-  level,
-  timestamp: pino.stdTimeFunctions.isoTime,
-}, pino.transport({
-  targets: [
-    { target: 'pino-pretty', level, options: { colorize: false, translateTime: 'yyyy-mm-dd HH:MM:ss', ignore: 'pid,hostname' } },
-    { target: 'pino/file', level, options: { destination: path.join(__dirname, 'logs', 'combined.log'), mkdir: true } },
-  ],
-}));
+// onLog 回调 — 由 index.js 设置，用于转发日志到面板环缓冲
+let onLogCallback = null;
 
-module.exports = logger;
+function makeLogger(prefix) {
+  return {
+    info(...args) {
+      const msg = `[${ts()}] INFO: ${prefix}${args.join(' ')}`;
+      process.stdout.write(msg + '\n');
+      writeln(msg);
+      if (onLogCallback) onLogCallback('INFO', `${prefix}${args.join(' ')}`);
+    },
+    warn(...args) {
+      const msg = `[${ts()}] WARN: ${prefix}${args.join(' ')}`;
+      process.stderr.write(msg + '\n');
+      writeln(msg);
+      if (onLogCallback) onLogCallback('WARN', `${prefix}${args.join(' ')}`);
+    },
+    error(...args) {
+      const msg = `[${ts()}] ERROR: ${prefix}${args.join(' ')}`;
+      process.stderr.write(msg + '\n');
+      writeln(msg);
+      if (onLogCallback) onLogCallback('ERROR', `${prefix}${args.join(' ')}`);
+    },
+    debug(...args) {
+      if (process.env.LOG_LEVEL === 'debug') {
+        const msg = `[${ts()}] DEBUG: ${prefix}${args.join(' ')}`;
+        process.stdout.write(msg + '\n');
+        writeln(msg);
+        if (onLogCallback) onLogCallback('DEBUG', `${prefix}${args.join(' ')}`);
+      }
+    },
+    child(opts) {
+      return makeLogger(opts.module ? `[${opts.module}] ` : prefix);
+    },
+  };
+}
+
+const defaultLogger = makeLogger('');
+
+Object.defineProperty(defaultLogger, 'onLog', {
+  set(fn) { onLogCallback = fn; },
+  get() { return onLogCallback; },
+  enumerable: true,
+});
+
+module.exports = defaultLogger;

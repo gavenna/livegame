@@ -366,3 +366,55 @@ if (gen !== genRef.current) return; // 过期丢弃
 1. 后端方案用 douyinLive (Go 编译的独立代理)，不要用 `@dycast/core`
 2. `@dycast/core` 适合浏览器端场景（Vue/React 前端通过 DyCastServer 代理连接）
 3. 如果非要用 `@dycast/core` 的工具函数（`getLiveInfo`、`getSignature`、各种 `decode*`），可单独导入，但需自建 WebSocket 连接层
+
+---
+
+### G14. 清理依赖前必须 grep 全量引用
+
+**症状**：删了一个"看起来没用"的 npm 包，server 启动即崩，日志还没写就挂了。
+
+**根因**：`npm ls | grep <包名>` 不准确（只检查 package.json 的依赖声明），实际代码可能有 `require('<包名>')`。
+
+**修复/预防**：
+```bash
+# 删包前必须跑
+grep -rn "require('<包名>')" server/ toolbox/ --include="*.js"
+```
+> 反面案例：2026-07-20 清理依赖时删除 `better-sqlite3`，但 `server/db.js` 还在用。server 启动即崩，用户看到"没开播"但根因是 server 没起来。
+
+---
+
+### G15. SEA 打包后 `__dirname` 语义变化
+
+**症状**：源码能跑，SEA exe 找不到文件。路径偏移到诡异的上级目录。
+
+**根因**：Node.js SEA 模式下，`__dirname` = exe 所在目录（项目根），而非普通模式下的 `server/` 子目录。`path.resolve(__dirname, '..')` 会偏移到项目根之上。
+
+**修复/预防**：
+```js
+// 通用写法（兼容普通 + SEA）
+const baseDir = __dirname.endsWith('server') ? path.resolve(__dirname, '..') : __dirname;
+```
+对于 `server/danmaku/` 下的文件：
+```js
+const baseDir = __dirname.endsWith(`server${path.sep}danmaku`) ? path.resolve(__dirname, '..', '..') : __dirname;
+```
+> **不要**用 `endsWith('danmaku')`——项目名也可能包含这个词。
+
+---
+
+### G16. 改代码后旧进程残留 → 新代码不生效
+
+**症状**：改了 `server/index.js`，启动 `node server/index.js` 报 `EADDRINUSE`，但 `curl` 各端口返回的还是旧代码的响应。日志内容也是旧版本的。
+
+**根因**：之前的 Node.js 进程还在后台跑着，占用端口。新进程无法启动，所有 API 请求打到旧进程上。
+
+**哪类 agent 会踩**：全部
+
+**修复/预防**：
+1. 改代码后第一步：`netstat -ano | grep ":8765" | grep LISTENING` 拿到 PID
+2. Git Bash 下用 `cmd //c "taskkill //F //PID <pid>"` 杀进程（双斜杠防 Bash 路径转换）
+3. 确认端口释放后再启新 server
+4. 考虑写 `npm run kill` 脚本：`for pid in $(netstat -ano | grep ":8765" | grep LISTENING | awk '{print $5}'); do cmd //c "taskkill //F //PID $pid" 2>nul; done`
+
+> 反面案例：2026-07-21 整个会话中至少 5 次因旧进程残留导致测试结果混乱，每次都要手动 kill 再重启。

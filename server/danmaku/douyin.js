@@ -20,10 +20,9 @@ const path = require('path');
 const fs = require('fs');
 
 // ====== 路径 ======
-const SCRIPT_DIR = __dirname;
-const PROJECT_DIR = path.resolve(SCRIPT_DIR, '..', '..');
-const SECRETS_PATH = path.join(PROJECT_DIR, 'server', 'secrets.json');
-const CONFIG_PATH = path.join(PROJECT_DIR, 'server', 'config.js');
+// SEA 模式: __dirname = exe目录(项目根)。普通模式: __dirname = server/danmaku/
+const baseDir = __dirname.endsWith(`server${path.sep}danmaku`) ? path.resolve(__dirname, '..', '..') : __dirname;
+const SECRETS_PATH = path.join(baseDir, 'server', 'secrets.json');
 
 // ====== 加载配置 ======
 let secrets;
@@ -40,7 +39,7 @@ const ROOM_ID = douyinCfg.roomId || '';
 const PROXY_WS_URL = douyinCfg.proxyUrl || 'ws://localhost:1088';
 const GAME_WS_URL = `ws://localhost:${secrets.relayPort || 8766}`;
 
-const config = require(CONFIG_PATH);
+const config = require('../config');
 const DOUYIN_GIFT_MAP = config.DOUYIN_GIFT_MAP || {};
 const ADAPTER_CFG = config.DOUYIN_ADAPTER || {};
 
@@ -268,8 +267,8 @@ function connectGame() {
 }
 
 function sendToGame(msg) {
-  if (!gameWs || gameWs.readyState !== WebSocket.OPEN) { return; }
-  try { gameWs.send(JSON.stringify(msg)); } catch (_) {}
+  if (!gameWs || gameWs.readyState !== WebSocket.OPEN) { logger.warn('[DOUYIN] sendToGame 丢弃: gameWs 未连接'); return; }
+  try { gameWs.send(JSON.stringify(msg)); } catch (_) { logger.error('[DOUYIN] sendToGame 失败'); }
 }
 
 // ====== douyinLive 格式 → 可遇AI 格式映射 ======
@@ -346,9 +345,18 @@ function connectProxy() {
     let data;
     try { data = JSON.parse(text); } catch (_) { return; }
 
+    const method = data.method || data.type || '?';
     const legacy = douyinLiveToLegacy(data);
-    if (!legacy) return;
+    if (!legacy) {
+      // 非弹幕/礼物消息（点赞/进房/关注等）
+      if (method !== 'system' && method !== 'ping' && method !== 'pong') {
+        logger.debug(`[DOUYIN] 跳过消息: method=${method} type=${data.type || '?'}`);
+      }
+      return;
+    }
 
+    logger.info(`[DOUYIN] 已收到弹幕数据 (douyin)`);
+    logger.info(`[DOUYIN] ${legacy.name}: "${legacy.content}"`);
     const msgs = translator.translate(legacy);
     for (const msg of msgs) sendToGame(msg);
   });
@@ -379,17 +387,21 @@ function startPing() {
 
 // ====== 主入口 ======
 
-function main() {
-  if (!ENABLED) {
-    logger.info('[DOUYIN] 适配器未启用，退出');
-    process.exit(0);
-  }
+let _running = false;
 
+function start() {
+  if (_running) { logger.info('[DOUYIN] 已在运行中'); return; }
+  if (!ENABLED) {
+    logger.info('[DOUYIN] 适配器未启用');
+    return;
+  }
   if (!ROOM_ID) {
     logger.error('[DOUYIN] roomId 未配置，请在 server/secrets.json → douyin.roomId 填入直播间号');
-    process.exit(1);
+    return;
   }
 
+  _running = true;
+  shutdown = false;
   logger.info('[DOUYIN] === 抖音弹幕适配器 (douyinLive) ===');
   logger.info(`[DOUYIN] 直播间: ${ROOM_ID}`);
   logger.info(`[DOUYIN] 代理:   ${PROXY_WS_URL}`);
@@ -399,17 +411,22 @@ function main() {
   connectGame();
   startPing();
   setTimeout(() => connectProxy(), 500);
-
-  process.on('SIGINT', () => {
-    logger.info('[DOUYIN] SIGINT，关闭...');
-    shutdown = true;
-    clearTimeout(gameReconnectTimer);
-    clearTimeout(proxyReconnectTimer);
-    if (proxyPingTimer) clearInterval(proxyPingTimer);
-    if (gameWs) gameWs.close();
-    if (proxyWs) proxyWs.close();
-    setTimeout(() => process.exit(0), 500);
-  });
 }
 
-main();
+function stop() {
+  logger.info('[DOUYIN] 停止适配器...');
+  shutdown = true;
+  _running = false;
+  clearTimeout(gameReconnectTimer);
+  clearTimeout(proxyReconnectTimer);
+  if (proxyPingTimer) clearInterval(proxyPingTimer);
+  if (gameWs) { try { gameWs.close(); } catch (e) {} gameWs = null; }
+  if (proxyWs) { try { proxyWs.close(); } catch (e) {} proxyWs = null; }
+  logger.info('[DOUYIN] 已停止');
+}
+
+function isRunning() { return _running; }
+
+module.exports = { start, stop, isRunning };
+
+if (require.main === module) start();
