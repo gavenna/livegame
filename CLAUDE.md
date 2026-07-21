@@ -30,7 +30,7 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 单体 Node.js 服务器 + 纯 HTML5 Canvas 前端。数据流:
 
 ```
-B站弹幕 → bilibili-relay.py → :8766 (Relay WS)
+B站弹幕 → bilibili.js → :8766 (Relay WS)
 抖音弹幕 → douyinLive.exe :1088 → douyin.js → :8766 (Relay WS)
                                             ↓
                                       Game Engine
@@ -42,7 +42,7 @@ B站弹幕 → bilibili-relay.py → :8766 (Relay WS)
 
 - **Server**: Node.js + `ws` 库。单进程处理 WebSocket + 游戏逻辑
 - **Frontend**: 单个 `index.html` + Canvas JS。OBS 浏览器源直接填 URL
-- **Danmaku**: B站用 `bilibili-relay.py`（Python），抖音用 `douyinLive.exe`（Go 编译，开源代理）+ `douyin.js`（Node.js 适配器）
+- **Danmaku**: B站用 `bilibili.js`（Node.js 直连 WebSocket），抖音用 `douyinLive.exe`（Go 编译，开源代理）+ `douyin.js`（Node.js 适配器）
 - **Database**: SQLite，重启不丢失
 
 ## 🚨 核心规则
@@ -88,7 +88,7 @@ B站弹幕 → bilibili-relay.py → :8766 (Relay WS)
 | `server/ranking.js` | 积分/段位/排行榜。SQLite 持久化 |
 | `server/logger.js` | Pino 日志。开发=pino-pretty→终端，生产=JSON→server/logs/ |
 | `server/danmaku/douyin.js` | 抖音适配器。连 douyinLive :1088，翻译弹幕/礼物/点赞/关注/进房 |
-| `server/danmaku/bilibili-relay.py` | B站适配器。blivedm 库连直播间 → relay :8766 |
+| `server/danmaku/bilibili.js` | B站适配器。直连 B站 WebSocket → relay :8766 |
 | `frontend/renderer.js` | Canvas 渲染主循环。帧率目标 30fps（直播 30fps 足够，省 CPU） |
 | `frontend/sprites.js` | 兵种精灵绘制。几何图形时期（Phase 1）vs 精灵图时期（Phase 3）实现不同 |
 | `frontend/audio.js` | 音效引擎。文件播放模式：往 `frontend/assets/audio/` 丢 MP3 即可。IIFE 包裹 |

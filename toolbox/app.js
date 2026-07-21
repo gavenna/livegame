@@ -1,5 +1,4 @@
 // war-danmaku 工具箱
-var isTauri = !!(window.__TAURI__);
 var API = 'http://localhost:8760/api';
 var ws = null, logPollTimer = null, pollTimer = null, logOffset = 0;
 
@@ -25,26 +24,15 @@ function addLogEntry(level, msg) {
 }
 
 async function pollLogs() {
-  if (isTauri) {
-    try {
-      var r = await window.__TAURI__.core.invoke('get_logs', { offset: logOffset });
-      for (var i = 0; i < r.entries.length; i++) {
-        var e = r.entries[i];
-        addLogEntry(e.level, e.msg);
-      }
-      logOffset = r.offset;
-    } catch (e) { /* retry */ }
-  } else {
-    try {
-      var res = await fetch(API + '/logs?since=' + logOffset);
-      var data = await res.json();
-      for (var i = 0; i < data.entries.length; i++) {
-        var e = data.entries[i];
-        addLogEntry(e.level, e.msg);
-        logOffset = Math.max(logOffset, e.seq);
-      }
-    } catch (e) { /* retry next poll */ }
-  }
+  try {
+    var res = await fetch(API + '/logs?since=' + logOffset);
+    var data = await res.json();
+    for (var i = 0; i < data.entries.length; i++) {
+      var e = data.entries[i];
+      addLogEntry(e.level, e.msg);
+      logOffset = Math.max(logOffset, e.seq);
+    }
+  } catch (e) { /* retry next poll */ }
 }
 
 function log(msg, cls) { addLogEntry('INFO', msg); }
@@ -80,9 +68,6 @@ document.querySelectorAll('.nav-item').forEach(function(b) {
 
 // === api adapter ===
 async function call(path, opts) {
-  if (isTauri) {
-    return tauriCall(path, opts);
-  }
   try {
     var res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
     var data = await res.json();
@@ -90,50 +75,6 @@ async function call(path, opts) {
   } catch (e) {
     log('API 调用失败: ' + path + ' — ' + e.message, 'lerr');
     return { error: e.message };
-  }
-}
-
-async function tauriCall(path, opts) {
-  try {
-    switch (path) {
-      case '/status':
-        return window.__TAURI__.core.invoke('get_status');
-      case '/start': {
-        var r1 = await window.__TAURI__.core.invoke('start_game');
-        var r2 = null;
-        try {
-          var cfg = await window.__TAURI__.core.invoke('read_config');
-          if (cfg.data && cfg.data.douyin && cfg.data.douyin.enabled) {
-            r2 = await window.__TAURI__.core.invoke('start_douyin');
-          }
-        } catch (e) {}
-        return { ok: true, douyinStarted: r2 === 'ok' };
-      }
-      case '/start-douyin':
-        await window.__TAURI__.core.invoke('start_douyin');
-        return { ok: true };
-      case '/stop-douyin':
-        await window.__TAURI__.core.invoke('stop_douyin');
-        return { ok: true };
-      case '/stop':
-        await window.__TAURI__.core.invoke('stop_all');
-        return { ok: true };
-      case '/config': {
-        var r = await window.__TAURI__.core.invoke('read_config');
-        if (r.error) return { error: r.error };
-        return r.data;
-      }
-      case '/config/save': {
-        var body = opts && opts.body ? JSON.parse(opts.body) : {};
-        await window.__TAURI__.core.invoke('save_config', { data: body });
-        return { ok: true };
-      }
-      default:
-        return { error: 'Unknown API in Tauri: ' + path };
-    }
-  } catch (e) {
-    log('Tauri 调用失败: ' + path + ' — ' + (typeof e === 'string' ? e : e.message || 'unknown'), 'lerr');
-    return { error: typeof e === 'string' ? e : e.message || 'unknown' };
   }
 }
 
@@ -329,11 +270,7 @@ async function checkComponents() {
 
 // === misc ===
 function openLogsFolder() {
-  if (isTauri) {
-    window.__TAURI__.core.invoke('open_logs');
-  } else {
-    call('/open-folder?path=server/logs');
-  }
+  call('/open-folder?path=server/logs');
 }
 function closeWindow() {
   call('/stop').then(function() { window.close(); });

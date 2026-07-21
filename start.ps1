@@ -29,27 +29,10 @@ Write-Host "[OK] Game server http://localhost:8765 (PID $($serverProc.Id))" -For
 $frontendProc = Start-Process -FilePath "cmd" -ArgumentList "/c npx http-server frontend -p 3000 -c-1" -NoNewWindow -PassThru
 Write-Host "[OK] Frontend http://localhost:3000 (PID $($frontendProc.Id))" -ForegroundColor Green
 
-# Check Bilibili config
-$secrets = Get-Content "$root\server\secrets.json" -Raw | ConvertFrom-Json
-$roomId = $secrets.bilibili.roomId
-
-$relayProc = $null
-if ($roomId -and $roomId -ne 0) {
-  Start-Sleep 3
-  $pyOk = python -c "import blivedm, websocket" 2>&1
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "[WARN] Installing Python deps..." -ForegroundColor Yellow
-    pip install git+https://github.com/xfgryujk/blivedm.git websocket-client
-    pip install brotli --upgrade 2>$null
-  }
-  $relayProc = Start-Process -FilePath "python" -ArgumentList "server/danmaku/bilibili-relay.py" -NoNewWindow -PassThru
-  Write-Host "[OK] Bilibili relay -> room $roomId (PID $($relayProc.Id))" -ForegroundColor Green
-}
-else {
-  Write-Host "[INFO] No Bilibili room configured, relay skipped" -ForegroundColor Gray
-}
+# B站: 通过控制面板 :8760 → "启动B站" 按钮启动，走 bilibili.js (Node.js)，无需 Python
 
 # Check Douyin config
+$secrets = Get-Content "$root\server\secrets.json" -Raw | ConvertFrom-Json
 $douyinEnabled = $secrets.douyin.enabled
 
 $douyinLiveProc = $null
@@ -96,7 +79,6 @@ Write-Host ""
 try {
   $serverProc.WaitForExit()
   if ($frontendProc) { $frontendProc.WaitForExit() }
-  if ($relayProc) { $relayProc.WaitForExit() }
   if ($douyinLiveProc) { $douyinLiveProc.WaitForExit() }
   if ($douyinProc) { $douyinProc.WaitForExit() }
 }
@@ -104,7 +86,6 @@ catch {
   Write-Host "Shutting down..." -ForegroundColor Yellow
   if (!$serverProc.HasExited) { $serverProc.Kill() }
   if ($frontendProc -and !$frontendProc.HasExited) { $frontendProc.Kill() }
-  if ($relayProc -and !$relayProc.HasExited) { $relayProc.Kill() }
   if ($douyinLiveProc -and !$douyinLiveProc.HasExited) { $douyinLiveProc.Kill() }
   if ($douyinProc -and !$douyinProc.HasExited) { $douyinProc.Kill() }
 }

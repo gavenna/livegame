@@ -64,7 +64,3 @@ server/secrets.json
 dist/
 war-danmaku.exe
 *.jsc
-
-# Tauri
-toolbox/dist/
-toolbox/src-tauri/target/

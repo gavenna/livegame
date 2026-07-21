@@ -11,7 +11,6 @@
 ```bash
 node --check server/*.js
 node --check server/danmaku/*.js
-node --check toolbox/server.js
 ```
 
 ### B. 依赖安全检查（🚨 踩过坑的）
@@ -37,7 +36,7 @@ curl http://localhost:3000               # 返回 HTML
 ```
 
 ### E. 端口一致性检查
-> 改端口必须同步更新: `server/config.js`、`frontend/wsClient.js`、`toolbox/server.js`、`start.ps1`、`build.js`
+> 改端口必须同步更新: `server/config.js`、`frontend/wsClient.js`、`start.ps1`、`build.js`
 ```bash
 grep -rn "8765\|8766\|3000\|1088\|8760" server/ toolbox/ frontend/ --include="*.js" --include="*.html" | grep -v node_modules | grep -v ".json"
 ```
@@ -48,7 +47,6 @@ grep -rn "8765\|8766\|3000\|1088\|8760" server/ toolbox/ frontend/ --include="*.
 - `server/logger.js` — 日志系统
 - `server/config.js` — 全局配置
 - `server/danmaku/douyin.js` — 抖音适配器
-- `toolbox/server.js` — 工具箱后端
 - `frontend/index.html` — 游戏画面入口
 
 ---

@@ -19,7 +19,6 @@
   },
   "devDependencies": {
     "@neutralinojs/neu": "^11.7.2",
-    "@tauri-apps/cli": "^2.11.4",
     "bytenode": "^1.6.0",
     "esbuild": "^0.28.1",
     "http-server": "^14.1.1",

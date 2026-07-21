@@ -99,3 +99,23 @@
 - "全部停止"没停游戏引擎 → 补 `engine.stop()` + `reset()`
 - `/api/start-douyin` 只 spawn douyinLive 没启适配器 → 补 `douyin.start()`
 - `pollStatus` 用适配器状态判 UI → 游戏跑着但适配器没开就切 offline → 改用 `s.game`
+
+## 2026-07-21（续）
+
+### 废弃文件清理
+- 删 `toolbox/server.js`（逻辑已迁入 `server/index.js`）
+- 删 `server/danmaku/bilibili-relay.py`（已被 `bilibili.js` 替代）
+- `start.ps1` / `start.sh` 同步更新，B站改为走 `bilibili.js`
+- 删 `toolbox/src-tauri/` 全部 Tauri v2 代码（Rust 后端 + 构建产物）
+- 删 `@tauri-apps/cli` dev 依赖
+- `toolbox/app.js` 清理 `isTauri` / `tauriCall()` 死代码
+- `.gitignore` 清理 Tauri 条目
+
+### 文档更新
+- 新增 `docs/构建指南.md`：SEA 构建流程、产物结构、运行方式
+- `docs/README.md` 更新：架构图、关键文件表、启动命令
+- `docs/项目进展.md` 清理过时待办项，更新已知问题列表
+- `CLAUDE.md` 更新：架构图 + bilibili.js 替换 Python relay 引用
+
+### 决策
+- 放弃 Tauri v2 工具箱：SEA 单 exe + 浏览器面板已验证可用，Tauri 多一层 Rust + WebView2 纯属增负

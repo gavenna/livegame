@@ -6,7 +6,6 @@ cleanup() {
   echo ""
   echo "正在关闭..."
   [ -n "$SERVER_PID" ] && kill $SERVER_PID 2>/dev/null
-  [ -n "$RELAY_PID" ] && kill $RELAY_PID 2>/dev/null
   echo "已关闭"
   exit 0
 }
@@ -29,16 +28,7 @@ node server/index.js &
 SERVER_PID=$!
 echo "[OK] 游戏服务端 ws://localhost:8765"
 
-# 如果配置了 B站直播间，启动弹幕中继
-ROOM_ID=$(node -e "try{console.log(require('./server/secrets.json').bilibili.roomId||0)}catch(e){console.log(0)}")
-if [ "$ROOM_ID" != "0" ] && [ -n "$ROOM_ID" ]; then
-  sleep 2
-  python server/danmaku/bilibili-relay.py &
-  RELAY_PID=$!
-  echo "[OK] B站弹幕中继 → 直播间 $ROOM_ID"
-else
-  echo "[INFO] 未配置 B站直播间，弹幕中继跳过"
-fi
+# B站: 通过控制面板 :8760 → "启动B站" 按钮启动，走 bilibili.js (Node.js)，无需 Python
 
 echo ""
 echo "浏览器 http://localhost:8765"

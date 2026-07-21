@@ -11,7 +11,7 @@ module.exports = {
 
   // === 服务器 ===
   WS_PORT: 8765,
-  RELAY_PORT: 8766,                 // 弹幕中继 WS 端口（bilibili-relay.py 连这个）
+  RELAY_PORT: 8766,                 // 弹幕中继 WS 端口（bilibili.js / douyin.js 连这个）
   DB_PATH: 'data/war-danmaku.db',   // SQLite 数据库路径
 
   // === 游戏循环 ===
