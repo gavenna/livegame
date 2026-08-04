@@ -140,6 +140,11 @@ if (gen !== genRef.current) return; // 过期丢弃
 
 > **2026-07-19 再次验证**: 新增矛兵/弓兵/突袭兵时，在 config.js 加了定义但在 sprites.js 漏了 SPRITE_DEFS + FALLBACK_COLORS，画面无显示。confirm 了此坑的持续性。详见 [[new-troop-checklist]]。
 
+> **2026-07-26 扩展 — 事件字段结构改动必须 grep 全部消费方**:
+> 改 `pendingEvents` 事件（如 `spawn_preview`）时，只对齐了部分消费方（Announcer），漏了 `frontend/renderer.js` 的 `evt.text` 消费 → 前端显示 undefined。
+> **消费方清单**: `frontend/renderer.js`（事件渲染）、`server/announcer/index.js`（话术）、`toolbox/`（面板展示）、`server/battle.js`（战斗事件）。
+> **预防**: 新增/修改/删除事件字段时，逐一对齐所有消费方；同一事件类型在不同分支必须结构一致（premium 有 text 而 cheap/medium 没有 → undefined）。反面案例：gameEngine.js handleGift else 分支 spawn_preview 缺 text 字段，renderer.js:250 `⚡ ${evt.text}` 显示 undefined。
+
 ---
 
 ## 流程纪律
@@ -416,5 +421,21 @@ const baseDir = __dirname.endsWith(`server${path.sep}danmaku`) ? path.resolve(__
 2. Git Bash 下用 `cmd //c "taskkill //F //PID <pid>"` 杀进程（双斜杠防 Bash 路径转换）
 3. 确认端口释放后再启新 server
 4. 考虑写 `npm run kill` 脚本：`for pid in $(netstat -ano | grep ":8765" | grep LISTENING | awk '{print $5}'); do cmd //c "taskkill //F //PID $pid" 2>nul; done`
+
+> 反面案例：2026-07-21 整个会话中至少 5 次因旧进程残留导致测试结果混乱，每次都要手动 kill 再重启。
+
+---
+
+### G17. observer/pushState 条件绑定 → 状态切换不可见
+
+**症状**：Announcer 收不到 COUNTDOWN 开始、PLAYING 开始、ROUND_END 等阶段切换事件。WAITING 阶段的 opening 消息从来不播。只有伴随事件的 pushState（如战斗 tick）才能通知到 Announcer。
+
+**根因**：observer 通知条件写成了 `if (this.pendingEvents.length > 0 && this.eventListeners.length > 0)`。纯状态切换（COUNTDOWN→PLAYING 等）时 pendingEvents 为空，observer 不触发。
+
+**哪类 agent 会踩**：任何实现 observer/pub-sub 模式的
+
+**修复/预防**：observer 通知**不绑定业务数据条件**。`pushState` / `emit` 本身就应该触发通知，不管有没有附带数据。空事件数组也是有效通知（状态变了）。
+
+> 反面案例：2026-07-23 Announcer 集成，COUNTDOWN/PLAYING 开始全部静默，debug 一天才发现是 pushState 条件过滤掉了。
 
 > 反面案例：2026-07-21 整个会话中至少 5 次因旧进程残留导致测试结果混乱，每次都要手动 kill 再重启。

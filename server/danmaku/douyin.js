@@ -206,7 +206,7 @@ class EventTranslator {
     const reward = ADAPTER_CFG.FOLLOW_REWARD_TROOP;
     if (reward) {
       for (let i = 0; i < (ADAPTER_CFG.FOLLOW_REWARD_COUNT || 1); i++) {
-        msgs.push({ type: 'gift', troopKey: reward, playerId, playerName });
+        msgs.push({ type: 'gift', troopKey: reward, giftName: '关注奖励', playerId, playerName });
       }
     }
     return msgs;

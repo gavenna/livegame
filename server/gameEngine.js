@@ -53,6 +53,9 @@ class GameEngine {
     // 事件队列（本 tick 产生的事件，推给前端后清空）
     this.pendingEvents = [];
 
+    // 事件监听器（Announcer 等外部模块订阅）
+    this.eventListeners = [];
+
     // 翻盘追踪（每局重置）
     this._comebackState = { red: false, blue: false, redMaxFL: 0, blueMaxFL: 0 };
 
@@ -73,7 +76,11 @@ class GameEngine {
   // ============================================================
 
   start() {
-    logger.info('[ENGINE] Starting game loop');
+    if (this.state !== STATE.WAITING && this.state !== 'STOPPED') {
+      logger.info('[ENGINE] 无法启动: 当前状态 ' + this.state);
+      return;
+    }
+    logger.info('[ENGINE] 开始新一轮');
     this.startRound();
   }
 
@@ -512,6 +519,7 @@ class GameEngine {
       this.pendingEvents.push({
         type: 'spawn_preview',
         team, key: actualKey, ownerId: playerId, ownerName: playerName,
+        giftName: giftName || '',
         text: previewText,
         time: Date.now(),
       });
@@ -528,11 +536,18 @@ class GameEngine {
     } else {
       const troop = this.battle.spawnTroop(team, actualKey, playerId, playerName);
       if (troop) {
+        // 非全局技能 & 非攻城 → 触发 spawn_preview 让前端和 Announcer 显示
         if (!troopDef.globalSkill && !troopDef.siege) {
-          const msgText = thanks
+          const previewText = thanks
             ? `${thanks} 召唤了 ${troopName}！`
             : `${name} 召唤了 ${troopName}！`;
-          this.pendingEvents.push({ type: 'danmaku_text', text: msgText, playerId, playerName, time: Date.now() });
+          this.pendingEvents.push({
+            type: 'spawn_preview',
+            team, key: actualKey, ownerId: playerId, ownerName: playerName,
+            giftName: giftName || '',
+            text: previewText,
+            time: Date.now(),
+          });
         }
         const giftScore = troop.damage * this.config.SCORE.GIFT_MULTIPLIER;
         this.addStat('gifts', playerId, giftScore);
@@ -710,6 +725,23 @@ class GameEngine {
       if (this.blueTeam.players.has(pid) && dmg > blueMaxDmg) { blueCmdr = pid; blueMaxDmg = dmg; }
     }.bind(this));
 
+    // 通知外部监听器（Announcer 等），所有状态都通知（状态切换也需要）
+    if (this.eventListeners.length > 0) {
+      const summary = {
+        state: this.state, round: this.round,
+        phaseElapsed: Date.now() - this.phaseStartedAt,
+        phaseTotal,
+        red: { players: this.redTeam.players.size, hp: this.redTeam.castleHP, maxHp: this.config.CASTLE_HP },
+        blue: { players: this.blueTeam.players.size, hp: this.blueTeam.castleHP, maxHp: this.config.CASTLE_HP },
+        frontLines: this.battle.frontLines,
+        leaderboard: null,
+      };
+      const snapshot = this.pendingEvents.slice();
+      for (const cb of this.eventListeners) {
+        try { cb(snapshot, summary); } catch (e) { /* 不影响游戏主循环 */ }
+      }
+    }
+
     if (this.state === STATE.PLAYING || this.state === STATE.ROUND_END) {
       state.troops = this.battle.troops.map(t => ({
         id: t.id,
@@ -739,6 +771,17 @@ class GameEngine {
     }
 
     broadcast(state);
+  }
+
+  /** 注册事件监听器 — 每个 tick 在 pushState 前调用 */
+  onEvent(callback) {
+    this.eventListeners.push(callback);
+  }
+
+  /** 移除事件监听器 */
+  offEvent(callback) {
+    const idx = this.eventListeners.indexOf(callback);
+    if (idx >= 0) this.eventListeners.splice(idx, 1);
   }
 
   // === D2: 指令冷却 ===

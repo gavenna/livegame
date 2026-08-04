@@ -64,3 +64,6 @@ server/secrets.json
 dist/
 war-danmaku.exe
 *.jsc
+
+# Announcer test output
+server/announcer/test-output/

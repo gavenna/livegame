@@ -16,6 +16,7 @@ const path = require('path');
 const { spawn, execSync } = require('child_process');
 const { startWSServer, startRelayWSS } = require('./wsServer');
 const { GameEngine } = require('./gameEngine');
+const { Announcer } = require('./announcer');
 const DB = require('./db');
 const config = require('./config');
 const logger = require('./logger');
@@ -257,6 +258,50 @@ async function handleToolboxAPI(req, res, body, url) {
         break;
       }
 
+      case '/api/announcer/status': {
+        const a = announcer;
+        sendJSON(res, {
+          enabled: a ? a.enabled : false,
+          dryRun: a ? a.dryRun : false,
+          traceLevel: a ? a.traceLevel : 0,
+          connected: a ? a.ws.connected : false,
+          queueLength: a ? a.scheduler.queueLength : 0,
+          stats: a ? a.stats : {},
+        });
+        break;
+      }
+
+      case '/api/announcer/config':
+        if (req.method === 'POST') {
+          if (announcer) {
+            if (body.dryRun !== undefined) announcer.dryRun = body.dryRun;
+            if (body.traceLevel !== undefined) announcer.traceLevel = body.traceLevel;
+            if (body.reportInterval !== undefined) announcer._lastReportTime = 0; // 重置以立即生效
+            if (body.castleDmgThreshold !== undefined) announcer._castleDmgThreshold = body.castleDmgThreshold;
+            if (body.enabled !== undefined) announcer.enabled = body.enabled;
+            // 同步更新 config 中的调度器参数
+            if (body.giftCooldown !== undefined) announcer.scheduler.cfg.giftCooldown = body.giftCooldown;
+            if (body.killCooldown !== undefined) announcer.scheduler.cfg.killCooldown = body.killCooldown;
+            if (body.siegeCooldown !== undefined) announcer.scheduler.cfg.siegeCooldown = body.siegeCooldown;
+            if (body.reportInterval !== undefined) announcer.scheduler.cfg.reportInterval = body.reportInterval;
+            logger.info('[ANNOUNCER] 配置已更新 (面板)');
+          }
+          sendJSON(res, { ok: true });
+        } else {
+          sendJSON(res, {
+            enabled: announcer ? announcer.enabled : false,
+            dryRun: announcer ? announcer.dryRun : false,
+            traceLevel: announcer ? announcer.traceLevel : 0,
+            autoReset: true,
+            castleDmgThreshold: announcer ? announcer._castleDmgThreshold : 100,
+            giftCooldown: announcer ? announcer.scheduler.cfg.giftCooldown : 2000,
+            killCooldown: announcer ? announcer.scheduler.cfg.killCooldown : 4000,
+            siegeCooldown: announcer ? announcer.scheduler.cfg.siegeCooldown : 5000,
+            reportInterval: announcer ? announcer.scheduler.cfg.reportInterval : 30000,
+          });
+        }
+        break;
+
       case '/api/config/save':
         if (req.method !== 'POST') { sendJSON(res, {}, 405); break; }
         fs.writeFileSync(secretsPath, JSON.stringify(body, null, 2), 'utf-8');
@@ -299,6 +344,7 @@ function startFrontendServer(port) {
 
 // ====== 游戏引擎状态（模块级，供 API 控制）======
 let engine = null;
+let announcer = null;
 let gameRunning = false;
 let _db = null;
 
@@ -336,6 +382,22 @@ async function main() {
   // 游戏引擎 — 等待用户点击"启动游戏"后创建并启动
   engine = new GameEngine(config, _db);
 
+  // 虚拟主播话术引擎 — 监听游戏事件 → TTS → waifu-agent
+  if (config.ANNOUNCER && config.ANNOUNCER.ENABLED) {
+    try {
+      // 读 LLM API Key
+      if (fs.existsSync(secretsPath)) {
+        const secrets = JSON.parse(fs.readFileSync(secretsPath, 'utf-8'));
+        if (secrets.announcer?.llmApiKey) config._llmApiKey = secrets.announcer.llmApiKey;
+      }
+      announcer = new Announcer(config);
+      engine.onEvent((events, summary) => announcer.handleEvents(events, summary));
+      logger.info('虚拟主播话术引擎已就绪');
+    } catch (e) {
+      logger.warn(`虚拟主播引擎启动失败: ${e.message} — 游戏正常运行但不播报`);
+    }
+  }
+
   // 适配器不自动启动 — 由用户在工具箱 :8760 手动控制"启动/停止"
   try {
     if (fs.existsSync(secretsPath)) {
@@ -362,6 +424,7 @@ async function main() {
     logger.info( 'Shutting down...');
     killProc(douyinProc);
     killProc(douyinAdapterProc);
+    if (announcer) announcer.shutdown();
     if (engine) engine.stop();
     if (_db) _db.close();
     logger.info( '===== STOP =====');

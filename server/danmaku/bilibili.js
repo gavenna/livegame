@@ -179,6 +179,7 @@ function handleGift(data) {
     type: 'gift',
     troopKey: troop,
     giftId: String(giftId),
+    giftName: giftName,
     playerId: `bili_${uid}`,
     playerName: uname || `bili_${uid}`,
   });
@@ -193,6 +194,7 @@ function handleSuperChat(data) {
   sendToGame({
     type: 'gift',
     troopKey: troop,
+    giftName: 'SuperChat',
     playerId: `bili_${uid}`,
     playerName: uname || `bili_${uid}`,
   });
@@ -205,6 +207,7 @@ function handleGuardBuy(data) {
   sendToGame({
     type: 'gift',
     troopKey: 'giant',
+    giftName: '舰长',
     playerId: `bili_${uid}`,
     playerName: uname || `bili_${uid}`,
   });

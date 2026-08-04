@@ -119,3 +119,50 @@
 
 ### 决策
 - 放弃 Tauri v2 工具箱：SEA 单 exe + 浏览器面板已验证可用，Tauri 多一层 Rust + WebView2 纯属增负
+
+## 2026-07-23
+
+### 虚拟主播集成 — waifu-agent × war-danmaku
+
+**war-danmaku 侧** (~1000行新增)：
+- 新增 `server/announcer/` 完整模块（6 个文件）：Announcer 主类 + 模板引擎 + 优先级调度器 + TTS 生成器 + LLM 引擎 + WS 客户端
+- 数据流：GameEngine pendingEvents → Announcer → 模板/LLM 话术 → edge-tts Python 子进程 → base64 MP3 → waifu-agent :9191
+- waifu-agent 零改动（relay 模式已原生支持 agent:emotion/motion/tts:audio）
+- 20 种游戏事件 → 中文话术模板（含 emotion/motion 标注）
+- P1-P10 优先级调度 + 批次窗口 + 防抖 + 音频时长同步
+- 工具箱新增 "🎤 话术" 面板（引擎状态/日志级别/播报节奏 实时可调）
+
+**waifu-agent 侧** (2 处改动)：
+- `App.tsx`：WS 监听去 agentMode 限定（始终连 9191）
+- `useTts.ts`：`playBuffer` 加 `activeSourceRef`，新音频 stop 旧音频防重叠
+
+**修复的 8 个 bug**：
+1. TTS 时长估算虚高（`audioSize/2000` → `audioSize/6`）
+2. castle_hit 刷屏 → 累积阈值播报
+3. observer `pendingEvents>0` 条件 → 状态切换不可见
+4. phase eventType 全部冲突 → 拆为 6 个独立类型
+5. `_init()` `await preGenerate` 阻塞 → WS 先连，预生成 fire-and-forget
+6. 调度器硬编码 500ms → 等 `_speak` 返回 durationMs
+7. 回合切换不清队列 → 自动 reset
+8. waifu-agent builtin 模式不监听 9191 → 始终启用 WS
+
+**遗留**：
+- LLM 话术代码完整但缺 API Key（`LLM_ENABLED=false`）
+- waifu-agent 口型音频不同步（vowel 按 ~220ms/字生成，edge-tts 实际 ~500ms/字）
+- 真实直播弹幕/礼物链路未经观众验证
+
+## 2026-07-25 ~ 08-05 — 话术引擎调试闭环
+- **设计变更**：WAITING 与 COUNTDOWN 合并。循环变为 `ROUND_END → COUNTDOWN(30s) → PLAYING → ROUND_END`；WAITING 仅首局候场（round=0）
+- COUNTDOWN 30s（DEV 模式 5s→30s）：`countdown_recruit` 招募话术（进入时+15s后）+ 最后5s读秒
+- **修复 8 个话术 bug**：
+  1. observer 通知被包在 PLAYING/ROUND_END 条件内 → WAITING/COUNTDOWN 全程静默 → 通知块移到条件外
+  2. `_gameStarted` 先于 `_maybePhaseTrigger` 置 true → game_start 永不触发 → 调整顺序
+  3. cheap/medium 礼物只 push `danmaku_text` → Announcer 无反应 → 补 `spawn_preview`
+  4. cheap/medium `spawn_preview` 缺 `text` → 前端 renderer.js:250 显示 undefined → 结构对齐 premium（text+giftName）
+  5. bilibili/douyin 关注奖励缺 `giftName` → 话术念 undefined → 全部补上
+  6. ⚔🔥 emoji 被 TTS 朗读 → `cleanForTts()` 清洗（画面保留原文）
+  7. 模板插值 `val !== undefined` 不防 null → `val != null` + `{xxx}` 残留兜底清除
+  8. Announcer giftName 缺失时 troopName 兜底
+- **新增文档**：`docs/话术引擎参考.md`（完整话术清单+调度规则）、`docs/话术验收清单.md`（按时间线验收表）
+- **新增资产**：`docs/assets/召唤指南.svg`（直播间挂图：阵营/免费指令/礼物→兵种表）
+- flow-debugger 参与排查：定位 cheap/medium `spawn_preview` 缺 text 字段（renderer.js 显示 undefined 根因）

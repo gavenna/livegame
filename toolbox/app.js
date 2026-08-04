@@ -13,6 +13,7 @@ function addLogEntry(level, msg) {
   var tag = '';
   if (msg.indexOf('[DOUYIN]') !== -1) tag = 'douyin';
   else if (msg.indexOf('[bilibili]') !== -1) tag = 'bilibili';
+  else if (msg.indexOf('[ANNOUNCER]') !== -1) tag = 'announcer';
   else if (msg.indexOf('[ENGINE]') !== -1 || msg.indexOf('[BATTLE]') !== -1 || msg.indexOf('[RANKING]') !== -1 || msg.indexOf('[WS]') !== -1) tag = 'engine';
   var d = document.createElement('div');
   d.className = 'log-entry' + (cls ? ' ' + cls : '') + (tag ? ' tag-' + tag : '');
@@ -62,6 +63,7 @@ document.querySelectorAll('.nav-item').forEach(function(b) {
     b.classList.add('active');
     document.getElementById('panel-' + b.dataset.panel).classList.add('active');
     if (b.dataset.panel === 'settings') loadConfig();
+    if (b.dataset.panel === 'announcer') loadAnnouncer();
     if (b.dataset.panel === 'tools') checkComponents();
   });
 });
@@ -274,6 +276,41 @@ function openLogsFolder() {
 }
 function closeWindow() {
   call('/stop').then(function() { window.close(); });
+}
+
+// === announcer ===
+async function loadAnnouncer() {
+  var s = await call('/announcer/status');
+  document.getElementById('ac-enabled').textContent = s.enabled ? '✅' : '⏸';
+  document.getElementById('ac-ws').textContent = s.connected ? '✅' : '❌';
+  document.getElementById('ac-queue').textContent = s.queueLength || 0;
+  document.getElementById('ac-spoken').textContent = (s.stats && s.stats.spoken) || 0;
+
+  var c = await call('/announcer/config');
+  if (c.error) return;
+  document.getElementById('ac-enable').checked = c.enabled;
+  document.getElementById('ac-dryrun').checked = c.dryRun;
+  document.getElementById('ac-trace').value = c.traceLevel || 0;
+  document.getElementById('ac-report-iv').value = c.reportInterval || 30000;
+  document.getElementById('ac-gift-cd').value = c.giftCooldown || 2000;
+  document.getElementById('ac-kill-cd').value = c.killCooldown || 4000;
+  document.getElementById('ac-siege-cd').value = c.siegeCooldown || 5000;
+  document.getElementById('ac-castle-th').value = c.castleDmgThreshold || 100;
+}
+
+async function saveAnnouncer() {
+  var body = {
+    enabled: document.getElementById('ac-enable').checked,
+    dryRun: document.getElementById('ac-dryrun').checked,
+    traceLevel: parseInt(document.getElementById('ac-trace').value),
+    reportInterval: parseInt(document.getElementById('ac-report-iv').value),
+    giftCooldown: parseInt(document.getElementById('ac-gift-cd').value),
+    killCooldown: parseInt(document.getElementById('ac-kill-cd').value),
+    siegeCooldown: parseInt(document.getElementById('ac-siege-cd').value),
+    castleDmgThreshold: parseInt(document.getElementById('ac-castle-th').value),
+  };
+  await call('/announcer/config', { method: 'POST', body: JSON.stringify(body) });
+  log('🎤 话术参数已更新');
 }
 
 // === init ===

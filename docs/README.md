@@ -60,6 +60,7 @@ node server/index.js
 | 想看什么 | 读这个 |
 |----------|--------|
 | 游戏设计（兵种/付费/话术） | `docs/项目规划/游戏设计.md` |
+| 话术引擎完整参考 | `docs/话术引擎参考.md` |
 | 服务器入口 | `server/index.js` |
 | 游戏状态机 + 指令处理 | `server/gameEngine.js` |
 | 战斗计算 | `server/battle.js` |

@@ -21,7 +21,7 @@ module.exports = {
   BATTLE_TICK_MS: 100,              // 战斗计算 tick 间隔 100ms (10tps)
 
   // DEV_MODE 覆盖（调试时自动缩短）
-  get PREP_TIME_EFF() { return this.DEV_MODE ? 5 * 1000 : this.PREP_TIME; },
+  get PREP_TIME_EFF() { return this.DEV_MODE ? 30 * 1000 : this.PREP_TIME; },
   get ROUND_TIME_EFF() { return this.DEV_MODE ? 3 * 60 * 1000 : this.ROUND_TIME; },
   get SETTLE_TIME_EFF() { return this.DEV_MODE ? 6 * 1000 : this.SETTLE_TIME; },
 
@@ -189,4 +189,28 @@ module.exports = {
   CANVAS_WIDTH: 1920,
   CANVAS_HEIGHT: 1080,
   FPS_TARGET: 30,
+
+  // === 虚拟主播话术 (waifu-agent 集成) ===
+  ANNOUNCER: {
+    ENABLED: true,                                 // 是否启用话术播报
+    WAIFU_WS_URL: 'ws://127.0.0.1:9191/status',   // waifu-agent WS 中继地址
+    TTS_VOICE: 'zh-CN-XiaoxiaoNeural',             // edge-tts 语音
+    TTS_CACHE_SIZE: 50,                            // LRU 缓存条数
+    PYTHON_PATH: 'python',                         // Python 路径
+    DRY_RUN: false,                                // true=跳过 TTS, 只打印话术 (调试用)
+    TRACE_LEVEL: 0,                                // 0=仅 speak 日志 1=管线追踪 2=全量调试
+
+    // 防抖/冷却 (ms)
+    GIFT_COOLDOWN: 2000,         // 礼物感谢最小间隔
+    KILL_COOLDOWN: 4000,         // 击杀播报最小间隔
+    SIEGE_COOLDOWN: 5000,        // 攻城播报最小间隔
+    REPORT_INTERVAL: 30000,      // 定期战况播报间隔
+
+    // LLM 话术 (Phase 3)
+    LLM_ENABLED: false,                                // Phase 3 前关闭
+    LLM_API_URL: 'https://api.deepseek.com/v1/chat/completions',
+    LLM_MODEL: 'deepseek-chat',
+    LLM_INTERVAL: 30000,         // LLM 调用最小间隔
+    LLM_TIMEOUT: 10000,          // LLM 超时降级到模板
+  },
 };

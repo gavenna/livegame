@@ -25,6 +25,9 @@
       <button class="nav-item" data-panel="settings">
         <span class="nav-icon">⚙</span><span>设置</span>
       </button>
+      <button class="nav-item" data-panel="announcer">
+        <span class="nav-icon">🎤</span><span>话术</span>
+      </button>
       <button class="nav-item" data-panel="tools">
         <span class="nav-icon">⬡</span><span>工具</span>
       </button>
@@ -70,6 +73,7 @@
               <button class="flt-btn" data-flt="douyin">抖音</button>
               <button class="flt-btn" data-flt="bilibili">B站</button>
               <button class="flt-btn" data-flt="engine">游戏</button>
+              <button class="flt-btn" data-flt="announcer">话术</button>
             </span>
           </div>
           <div id="event-log"><div class="log-empty">等待操作…</div></div>
@@ -96,6 +100,35 @@
         <div class="card-actions">
           <button class="btn-primary" onclick="saveConfig()">保存设置</button>
           <span id="cfg-save-msg"></span>
+        </div>
+      </section>
+
+      <!-- ====== 主播话术 ====== -->
+      <section id="panel-announcer" class="panel">
+        <div class="card">
+          <div class="card-title">话术引擎</div>
+          <div class="stat-grid" style="margin-bottom:12px">
+            <div class="stat"><span class="stat-v" id="ac-enabled">—</span><span class="stat-l">引擎状态</span></div>
+            <div class="stat"><span class="stat-v" id="ac-ws">—</span><span class="stat-l">waifu-agent</span></div>
+            <div class="stat"><span class="stat-v" id="ac-queue">0</span><span class="stat-l">队列长度</span></div>
+            <div class="stat"><span class="stat-v" id="ac-spoken">0</span><span class="stat-l">已播报</span></div>
+          </div>
+          <div class="form">
+            <label><span>启用话术</span><input type="checkbox" id="ac-enable" onchange="saveAnnouncer()"></label>
+            <label><span>Dry-Run <em>(跳过TTS)</em></span><input type="checkbox" id="ac-dryrun" onchange="saveAnnouncer()"></label>
+            <label><span>日志级别</span><select id="ac-trace" onchange="saveAnnouncer()"><option value="0">0 正常</option><option value="1">1 管线追踪</option><option value="2">2 全量</option></select></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">播报节奏</div>
+          <div class="form">
+            <label><span>定期战况间隔 (ms)</span><input type="number" id="ac-report-iv" step="5000" min="10000" onchange="saveAnnouncer()"></label>
+            <label><span>礼物冷却 (ms)</span><input type="number" id="ac-gift-cd" step="500" min="0" onchange="saveAnnouncer()"></label>
+            <label><span>击杀冷却 (ms)</span><input type="number" id="ac-kill-cd" step="500" min="0" onchange="saveAnnouncer()"></label>
+            <label><span>攻城冷却 (ms)</span><input type="number" id="ac-siege-cd" step="500" min="0" onchange="saveAnnouncer()"></label>
+            <label><span>城堡伤害阈值</span><input type="number" id="ac-castle-th" step="10" min="10" onchange="saveAnnouncer()"></label>
+          </div>
         </div>
       </section>
 
