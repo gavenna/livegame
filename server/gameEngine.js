@@ -483,7 +483,8 @@ class GameEngine {
       this.handleJoin(team, playerId, playerName);
     }
 
-    let actualKey = this.config.DOUYIN_GIFT_MAP[troopKey] || troopKey;
+    let actualKey = this.config.TROOPS[troopKey] ? troopKey : null;
+    if (!actualKey) { logger.warn(`[GIFT] 未知兵种 key: ${troopKey}`); return; }
     const troopDef = this.config.TROOPS[actualKey];
     const troopName = troopDef ? troopDef.name : actualKey;
     const isChest = troopDef && troopDef.random;  // 盲盒

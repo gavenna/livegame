@@ -110,28 +110,6 @@ function startWSServer(port) {
   setupConnections(wss);
 }
 
-/**
- * 启动纯 WebSocket 服务（无 HTTP，给弹幕中继用）
- * @param {number} port
- */
-function startRelayWSS(port) {
-  const wss = new WebSocketServer({ port });
-
-  wss.on('listening', () => {
-    logger.info(`[WS] Relay WebSocket on port ${port}`);
-  });
-
-  wss.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      logger.error(`[WS] Relay port ${port} 已被占用`);
-      process.exit(1);
-    }
-    throw err;
-  });
-
-  setupConnections(wss);
-}
-
 /** 为 WSS 注册连接处理 */
 function setupConnections(wss) {
 
@@ -207,4 +185,4 @@ function sendToPlayer(playerId, msg) {
   }
 }
 
-module.exports = { startWSServer, startRelayWSS, broadcast, onMessage, sendToPlayer };
+module.exports = { startWSServer, broadcast, onMessage, sendToPlayer };
