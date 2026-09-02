@@ -11,7 +11,7 @@ module.exports = {
 
   // === 服务器 ===
   WS_PORT: 8765,
-  RELAY_PORT: 8766,                 // 弹幕中继 WS 端口（bilibili.js / douyin.js 连这个）
+  DANMAKU_RELAY_WS: 'ws://localhost:8766', // 弹幕中继 WS（连接 danmaku-relay）
   DB_PATH: 'data/war-danmaku.db',   // SQLite 数据库路径
 
   // === 游戏循环 ===
@@ -138,31 +138,6 @@ module.exports = {
     '赞': 'spawn_militia_3',    // 抖音点赞映射
   },
 
-  // === 抖音礼物 ID 映射 ===
-  // 精确 ID 映射优先，未匹配则走 douyin.js 价格阶梯
-  // 上线时根据实际抖音礼物 ID 填入（ID 可能随版本变动）
-  DOUYIN_GIFT_MAP: {
-    // '1': 'swordsman',    // 小心心 1抖币
-    // '5': 'knight',       // 棒棒糖 5抖币
-    // '10': 'archer',      // 鲜花 10抖币
-    // '30': 'catapult',    // 铁锤 30抖币
-    // '99': 'royalGuard',  // 盾墙 99抖币
-    // '199': 'fireArrow',  // 火矢齐射 199抖币
-    // '299': 'batteringRam', // 攻城锤 299抖币
-    // '520': 'giant',      // 城堡 520抖币
-    // '1200': 'dragonKnight', // 龙骑士 1200抖币
-    // '3000': 'wrathOfGod',   // 天神之怒 3000抖币
-  },
-
-  // === 抖音适配器配置 ===
-  DOUYIN_ADAPTER: {
-    PROXY_WS_URL: 'ws://localhost:1088', // douyinLive 代理地址
-    LIKE_COOLDOWN_MS: 1000,         // 点赞冷却（单用户 ms）
-    AUTO_JOIN_ON_ENTER: true,       // 进房自动加入随机阵营
-    ENTER_JOIN_CHANCE: 0,           // 进房自动加入概率（0=全加入，0.5=50%）
-    FOLLOW_REWARD_TROOP: 'militia', // 关注奖励兵种（null=无奖励）
-    FOLLOW_REWARD_COUNT: 1,         // 关注奖励兵种数量
-  },
 
   // === 兵种动画 ===
   ANIMATION: {

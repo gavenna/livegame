@@ -1,11 +1,12 @@
 /**
- * war-danmaku 游戏服务器 — 单 exe 一体
+ * war-danmaku 游戏服务器
  *
- * 一个 exe 启动全部：
  *   :8765  HTTP+WS  (游戏前端 + WebSocket通信)
- *   :8766  WS       (弹幕中继)
  *   :3000  HTTP     (纯游戏画面, OBS 用)
  *   :8760  HTTP     (工具箱管理面板, 自动打开浏览器)
+ *
+ * 弹幕数据由 danmaku-relay 工具提供 (ws://localhost:8766)。
+ * 弹幕控制由工具箱跨进程调用 danmaku-relay :8767 API。
  *
  * 用法: node server/index.js  或  war-danmaku.exe (双击)
  */
@@ -13,8 +14,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { spawn, execSync } = require('child_process');
-const { startWSServer, startRelayWSS } = require('./wsServer');
+const { execSync } = require('child_process');
+const { startWSServer } = require('./wsServer');
 const { GameEngine } = require('./gameEngine');
 const { Announcer } = require('./announcer');
 const DB = require('./db');
@@ -42,56 +43,6 @@ logger.onLog = (level, msg) => {
   if (LOG_RING.length > LOG_RING_MAX) LOG_RING.shift();
 };
 
-// ====== 进程管理 ======
-let douyinProc = null;
-let douyinAdapterProc = null;
-
-function isRunning(p) { return p && p.exitCode === null; }
-
-function killProc(p) {
-  if (!p || p.exitCode !== null) return;
-  try { execSync(`taskkill /F /PID ${p.pid} 2>nul`, { stdio: 'ignore' }); } catch (e) {}
-}
-
-function getExePath(name) {
-  for (const c of [path.join(baseDir, name), path.join(baseDir, 'tools', name)])
-    if (fs.existsSync(c)) return c;
-  return null;
-}
-
-function genDouyinYaml() {
-  if (!fs.existsSync(secretsPath)) { logger.warn( 'no secrets.json, skip douyin yaml gen'); return false; }
-  const s = JSON.parse(fs.readFileSync(secretsPath, 'utf-8'));
-  const ck = s.douyin?.cookie || '';
-  if (!ck) { logger.warn( 'no douyin cookie, skip yaml gen'); return false; }
-  const yp = path.join(baseDir, 'tools', 'douyinLive.yaml');
-  const dir = path.dirname(yp);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(yp, `port: "1088"\nlog:\n  level: "info"\ncookie:\n  douyin: "${ck}"\n`);
-  logger.info( `Generated douyinLive.yaml (cookie ${ck.length} chars)`);
-  return true;
-}
-
-function spawnDouyin() {
-  return new Promise((resolve) => {
-    if (isRunning(douyinProc)) { resolve({ ok: true, msg: '已在运行中', pid: douyinProc.pid }); return; }
-    const exe = getExePath('douyinLive.exe');
-    if (!exe) { resolve({ error: 'douyinLive.exe 未找到' }); return; }
-    genDouyinYaml();
-    const cfg = path.join(baseDir, 'tools', 'douyinLive.yaml');
-    logger.info( `spawn douyin: ${exe} --config ${cfg}`);
-    douyinProc = spawn(exe, ['--config', cfg], { cwd: baseDir, stdio: 'ignore', detached: true });
-    douyinProc.on('exit', (code) => { logger.info( `Douyin exited code=${code}`); douyinProc = null; });
-
-    const adapterExe = getExePath('douyin-adapter.exe');
-    if (adapterExe && !isRunning(douyinAdapterProc)) {
-      logger.info( `spawn adapter: ${adapterExe}`);
-      douyinAdapterProc = spawn(adapterExe, [], { cwd: baseDir, stdio: 'ignore', detached: true });
-      douyinAdapterProc.on('exit', (code) => { logger.info( `DouyinAdapter exited code=${code}`); douyinAdapterProc = null; });
-    }
-    resolve({ ok: true, pid: douyinProc.pid });
-  });
-}
 
 // ====== MIME ======
 const MIME = {
@@ -150,16 +101,11 @@ async function handleToolboxAPI(req, res, body, url) {
     switch (url.pathname) {
 
       case '/api/status': {
-        const douyinMod = require('./danmaku/douyin');
-        const bilibiliMod = require('./danmaku/bilibili');
         sendJSON(res, {
           game: gameRunning,
-          douyin: douyinMod.isRunning(),
-          douyinLive: isRunning(douyinProc),
-          bilibili: bilibiliMod.isRunning(),
+          relayConnected: relayClient ? relayClient.isConnected() : false,
           frontend: true,
           gamePid: process.pid,
-          douyinPid: douyinProc?.pid || null,
           toolboxPort: 8760,
         });
         break;
@@ -183,67 +129,9 @@ async function handleToolboxAPI(req, res, body, url) {
         break;
       }
 
-      case '/api/start': {
-        logger.info('START adapters');
-        let douyinOk = false, bilibiliOk = false;
-        try {
-          const douyinMod = require('./danmaku/douyin');
-          if (!isRunning(douyinProc)) {
-            const r = await spawnDouyin();
-            if (r.ok) await new Promise(r => setTimeout(r, 800));
-          }
-          douyinMod.start();
-          douyinOk = true;
-        } catch (e) { logger.error(`抖音适配器启动失败: ${e.message}`); }
-
-        try {
-          const bilibiliMod = require('./danmaku/bilibili');
-          bilibiliMod.start();
-          bilibiliOk = true;
-        } catch (e) { logger.error(`B站适配器启动失败: ${e.message}`); }
-
-        sendJSON(res, { ok: true, douyin: douyinOk, bilibili: bilibiliOk });
-        break;
-      }
-
-      case '/api/start-douyin': {
-        const r = await spawnDouyin();
-        if (r.ok) {
-          await new Promise(resolve => setTimeout(resolve, 800));
-          try { require('./danmaku/douyin').start(); } catch (e) { logger.error(`douyin.start: ${e.message}`); }
-        }
-        sendJSON(res, r);
-        break;
-      }
-
-      case '/api/stop-douyin':
-        logger.info('STOP-DOUYIN');
-        try { require('./danmaku/douyin').stop(); } catch (e) {}
-        killProc(douyinProc); douyinProc = null;
-        killProc(douyinAdapterProc); douyinAdapterProc = null;
-        try { execSync('taskkill /F /IM douyinLive.exe 2>nul & taskkill /F /IM douyin-adapter.exe 2>nul', { stdio: 'ignore' }); } catch (e) {}
-        sendJSON(res, { ok: true });
-        break;
-
-      case '/api/start-bilibili':
-        logger.info('START-BILIBILI');
-        try { require('./danmaku/bilibili').start(); sendJSON(res, { ok: true }); }
-        catch (e) { sendJSON(res, { error: e.message }, 500); }
-        break;
-
-      case '/api/stop-bilibili':
-        logger.info('STOP-BILIBILI');
-        try { require('./danmaku/bilibili').stop(); sendJSON(res, { ok: true }); }
-        catch (e) { sendJSON(res, { error: e.message }, 500); }
-        break;
 
       case '/api/stop':
-        logger.info('STOP all');
-        try { require('./danmaku/douyin').stop(); } catch (e) { logger.error(`Stop douyin: ${e.message}`); }
-        try { require('./danmaku/bilibili').stop(); } catch (e) { logger.error(`Stop bilibili: ${e.message}`); }
-        killProc(douyinProc); douyinProc = null;
-        killProc(douyinAdapterProc); douyinAdapterProc = null;
-        try { execSync('taskkill /F /IM douyinLive.exe 2>nul & taskkill /F /IM douyin-adapter.exe 2>nul', { stdio: 'ignore' }); } catch (e) {}
+        logger.info('STOP game');
         if (gameRunning && engine) { engine.reset(); gameRunning = false; }
         sendJSON(res, { ok: true });
         break;
@@ -345,6 +233,7 @@ function startFrontendServer(port) {
 // ====== 游戏引擎状态（模块级，供 API 控制）======
 let engine = null;
 let announcer = null;
+let relayClient = null;
 let gameRunning = false;
 let _db = null;
 
@@ -366,10 +255,6 @@ async function main() {
   // 游戏 WS + HTTP (:8765)
   startWSServer(config.WS_PORT);
   logger.info( `Port :8765 OK (game WS+HTTP)`);
-
-  // 弹幕中继 (:8766)
-  startRelayWSS(config.RELAY_PORT);
-  logger.info( `Port :8766 OK (relay WS)`);
 
   // 前端服务器 (:3000, OBS)
   startFrontendServer(3000);
@@ -398,20 +283,17 @@ async function main() {
     }
   }
 
-  // 适配器不自动启动 — 由用户在工具箱 :8760 手动控制"启动/停止"
-  try {
-    if (fs.existsSync(secretsPath)) {
-      const secrets = JSON.parse(fs.readFileSync(secretsPath, 'utf-8'));
-      const dyReady = !!(secrets.douyin?.enabled && secrets.douyin?.roomId);
-      const blReady = !!(secrets.bilibili?.roomId && secrets.bilibili?.cookie);
-      logger.info( `抖音适配器: ${dyReady ? '已配置 (待手动启动)' : '未配置'}`);
-      logger.info( `B站适配器: ${blReady ? '已配置 (待手动启动)' : '未配置'}`);
-    }
-  } catch (e) {
-    logger.error( `配置读取失败: ${e.message}`);
-  }
+  // 弹幕中继客户端 — 连接 danmaku-relay :8766 消费弹幕数据
+  relayClient = require('./relayClient');
+  relayClient.connect(config.DANMAKU_RELAY_WS);
+  relayClient.onDanmaku((msg) => { if (engine) engine.handleMessage(msg); });
+  logger.info(`Relay client → ${config.DANMAKU_RELAY_WS}`);
+
+  // 弹幕由独立工具管理 — 用户通过 danmaku-relay :8767 控制各适配器
+  // 或使用统一启动脚本 start.ps1 一键启动所有进程
 
   logger.info( 'READY. Toolbox → http://localhost:8760');
+  logger.info( '弹幕控制请使用 danmaku-relay :8767');
   logger.info( `Logs → ${path.join(baseDir, 'server', 'logs', 'combined.log')}`);
 
   // 自动打开浏览器
@@ -422,8 +304,7 @@ async function main() {
   // 优雅退出
   process.on('SIGINT', () => {
     logger.info( 'Shutting down...');
-    killProc(douyinProc);
-    killProc(douyinAdapterProc);
+    relayClient.disconnect();
     if (announcer) announcer.shutdown();
     if (engine) engine.stop();
     if (_db) _db.close();

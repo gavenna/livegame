@@ -311,7 +311,7 @@ log('\n=== L3: 完整游戏流程 (dry-run) ===');
 var config = require('../config');
 var testConfig = {
   DEV_MODE: true,
-  WS_PORT: 9999, RELAY_PORT: 9998, DB_PATH: config.DB_PATH,
+  WS_PORT: 9999, DB_PATH: config.DB_PATH,
   CASTLE_HP: 10000, CANVAS_WIDTH: 1920, CANVAS_HEIGHT: 1080, FPS_TARGET: 30,
   PREP_TIME: 30000, ROUND_TIME: 1200000, SETTLE_TIME: 10000, BATTLE_TICK_MS: 100,
   get PREP_TIME_EFF() { return 5000; },
@@ -321,8 +321,7 @@ var testConfig = {
   TROOPS: config.TROOPS || {}, WAR_CHEST_POOL: config.WAR_CHEST_POOL || [],
   WAR_CHEST_WEIGHTS: config.WAR_CHEST_WEIGHTS || [],
   SCORE: config.SCORE || {}, RANKS: config.RANKS || [],
-  DANMAKU_COMMANDS: config.DANMAKU_COMMANDS || {}, DOUYIN_GIFT_MAP: config.DOUYIN_GIFT_MAP || {},
-  DOUYIN_ADAPTER: config.DOUYIN_ADAPTER || {}, ANIMATION: config.ANIMATION || {},
+  DANMAKU_COMMANDS: config.DANMAKU_COMMANDS || {}, ANIMATION: config.ANIMATION || {},
   ANNOUNCER: { ENABLED: true, DRY_RUN: true, TRACE_LEVEL: 0, LLM_ENABLED: false,
     WAIFU_WS_URL: 'ws://127.0.0.1:9191/status', TTS_VOICE: 'zh-CN-XiaoxiaoNeural',
     TTS_CACHE_SIZE: 10, PYTHON_PATH: 'python', GIFT_COOLDOWN: 100, KILL_COOLDOWN: 100,

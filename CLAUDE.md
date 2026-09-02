@@ -27,22 +27,27 @@ node .claude/skills/artist/scripts/gen-anim-frames.js  # AI 动画帧生成（�
 
 ## 架构
 
-单体 Node.js 服务器 + 纯 HTML5 Canvas 前端。数据流:
+Node.js 游戏服务器 + 纯 HTML5 Canvas 前端。弹幕数据由独立项目 **danmaku-relay** 通过 `:8766` WS 协议提供。
+
+数据流:
 
 ```
-B站弹幕 → bilibili.js → :8766 (Relay WS)
-抖音弹幕 → douyinLive.exe :1088 → douyin.js → :8766 (Relay WS)
-                                            ↓
-                                      Game Engine
+danmaku-relay (独立 exe)
+  B站弹幕 → bilibili.js → relay.broadcast
+  抖音弹幕 → douyinLive.exe :1088 → douyin.js → relay.broadcast
+                         ↓
+                  WS Server :8766
+                         ↓
+              server/relayClient.js ─→ Game Engine
                                             ↓
                                    WebSocket :8765 → 前端 Canvas
                                             ↓
                                    积分/排行（SQLite 持久化）
 ```
 
-- **Server**: Node.js + `ws` 库。单进程处理 WebSocket + 游戏逻辑
+- **Server**: Node.js + `ws` 库。监听 `:8765` (游戏 HTTP+WS)、`:3000` (前端)、`:8760` (工具箱)
 - **Frontend**: 单个 `index.html` + Canvas JS。OBS 浏览器源直接填 URL
-- **Danmaku**: B站用 `bilibili.js`（Node.js 直连 WebSocket），抖音用 `douyinLive.exe`（Go 编译，开源代理）+ `douyin.js`（Node.js 适配器）
+- **Danmaku**: 由 danmaku-relay 独立工具提供 — 参阅 `../danmaku-relay/docs/协议.md`
 - **Database**: SQLite，重启不丢失
 
 ## 🚨 核心规则
@@ -87,8 +92,9 @@ B站弹幕 → bilibili.js → :8766 (Relay WS)
 | `server/wsServer.js` | WebSocket 服务。两个端口: 8765(前端) + 8766(弹幕中继) |
 | `server/ranking.js` | 积分/段位/排行榜。SQLite 持久化 |
 | `server/logger.js` | Pino 日志。开发=pino-pretty→终端，生产=JSON→server/logs/ |
-| `server/danmaku/douyin.js` | 抖音适配器。连 douyinLive :1088，翻译弹幕/礼物/点赞/关注/进房 |
-| `server/danmaku/bilibili.js` | B站适配器。直连 B站 WebSocket → relay :8766 |
+| `D:\Projects\danmaku-relay\danmaku\douyin.js` | 抖音适配器（独立项目 danmaku-relay）。连 douyinLive :1088，翻译弹幕/礼物/点赞/关注/进房 |
+| `D:\Projects\danmaku-relay\danmaku\bilibili.js` | B站适配器（独立项目 danmaku-relay）。直连 B站 WebSocket → relay :8766 broadcast |
+| `server/relayClient.js` | 弹幕中继客户端。连 danmaku-relay :8766 消费弹幕，断线自动重连 |
 | `frontend/renderer.js` | Canvas 渲染主循环。帧率目标 30fps（直播 30fps 足够，省 CPU） |
 | `frontend/sprites.js` | 兵种精灵绘制。几何图形时期（Phase 1）vs 精灵图时期（Phase 3）实现不同 |
 | `frontend/audio.js` | 音效引擎。文件播放模式：往 `frontend/assets/audio/` 丢 MP3 即可。IIFE 包裹 |

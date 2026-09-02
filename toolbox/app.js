@@ -1,5 +1,6 @@
 // war-danmaku 工具箱
 var API = 'http://localhost:8760/api';
+var DANMAKU_API = 'http://localhost:8767/api';
 var ws = null, logPollTimer = null, pollTimer = null, logOffset = 0;
 
 var logFilter = 'all';
@@ -116,10 +117,13 @@ async function pollStatus() {
   if (s.error) { log('状态查询失败: ' + s.error, 'lerr'); return; }
   document.getElementById('st-game').textContent = s.game ? '✅' : '⏸';
   document.getElementById('st-frontend').textContent = s.frontend ? '✅' : '⏸';
-  document.getElementById('st-douyin').textContent = s.douyin ? '✅' : '⏸';
-  if (s.douyin) document.getElementById('btn-douyin').textContent = '📡 停止抖音';
-  var blEl = document.getElementById('st-bilibili'); if (blEl) blEl.textContent = s.bilibili ? '✅' : '⏸';
-  if (s.bilibili) document.getElementById('btn-bilibili').textContent = '📺 停止B站';
+
+  // 游戏 event log 中的 relay 连接状态
+  if (!s.relayConnected) {
+    document.getElementById('st-douyin').textContent = '⏸';
+    var blEl = document.getElementById('st-bilibili'); if (blEl) blEl.textContent = '⏸';
+  }
+
   var btn = document.getElementById('btn-start');
   if (s.game) {
     setUI('running');
@@ -130,6 +134,22 @@ async function pollStatus() {
     btn.textContent = '▶ 启动游戏';
     btn.disabled = false;
   }
+}
+
+async function pollDanmakuStatus() {
+  try {
+    var res = await fetch(DANMAKU_API + '/status');
+    var s = await res.json();
+    document.getElementById('st-douyin').textContent = s.douyin ? '✅' : '⏸';
+    if (s.douyin) document.getElementById('btn-douyin').textContent = '📡 停止抖音';
+    var blEl = document.getElementById('st-bilibili'); if (blEl) blEl.textContent = s.bilibili ? '✅' : '⏸';
+    if (s.bilibili) document.getElementById('btn-bilibili').textContent = '📺 停止B站';
+    // 如果 danmaku-relay 未运行，重置按钮状态
+    if (s.error) {
+      document.getElementById('st-douyin').textContent = '❓';
+      document.getElementById('st-bilibili').textContent = '❓';
+    }
+  } catch (e) { /* danmaku-relay 未启动 */ }
 }
 
 // === actions ===
@@ -149,45 +169,58 @@ async function startGame() {
 }
 
 async function toggleDouyin() {
-  var s = await call('/status');
   var btn = document.getElementById('btn-douyin');
+  // 从 danmaku-relay 获取当前状态
+  var s;
+  try { var r = await fetch(DANMAKU_API + '/status'); s = await r.json(); } catch (e) { s = {}; }
   if (s.douyin) {
     log('■ 停止抖音…');
-    await call('/stop-douyin');
+    try { await fetch(DANMAKU_API + '/stop-douyin'); } catch (e) {}
     btn.textContent = '📡 启动抖音';
     document.getElementById('st-douyin').textContent = '⏸';
     log('✅ 抖音已停止');
   } else {
     log('📡 启动抖音…');
-    var r = await call('/start-douyin');
-    if (r.ok) {
-      log('✅ 抖音代理已启动');
-      btn.textContent = '📡 停止抖音';
-      document.getElementById('st-douyin').textContent = '✅';
-    } else {
-      log('❌ 抖音启动失败: ' + (r.error || ''), 'lerr');
+    try {
+      var res = await fetch(DANMAKU_API + '/start-douyin');
+      var j = await res.json();
+      if (j.ok) {
+        log('✅ 抖音代理已启动');
+        btn.textContent = '📡 停止抖音';
+        document.getElementById('st-douyin').textContent = '✅';
+      } else {
+        log('❌ 抖音启动失败: ' + (j.error || ''), 'lerr');
+      }
+    } catch (e) {
+      log('❌ 抖音启动失败: danmaku-relay 未运行', 'lerr');
     }
   }
 }
 
 async function toggleBilibili() {
-  var s = await call('/status');
   var btn = document.getElementById('btn-bilibili');
+  var s;
+  try { var r = await fetch(DANMAKU_API + '/status'); s = await r.json(); } catch (e) { s = {}; }
   if (s.bilibili) {
     log('■ 停止B站…');
-    await call('/stop-bilibili');
+    try { await fetch(DANMAKU_API + '/stop-bilibili'); } catch (e) {}
     btn.textContent = '📺 启动B站';
     document.getElementById('st-bilibili').textContent = '⏸';
     log('✅ B站已停止');
   } else {
     log('📺 启动B站…');
-    var r = await call('/start-bilibili');
-    if (r.ok) {
-      log('✅ B站适配器已启动');
-      btn.textContent = '📺 停止B站';
-      document.getElementById('st-bilibili').textContent = '✅';
-    } else {
-      log('❌ B站启动失败: ' + (r.error || ''), 'lerr');
+    try {
+      var res = await fetch(DANMAKU_API + '/start-bilibili');
+      var j = await res.json();
+      if (j.ok) {
+        log('✅ B站适配器已启动');
+        btn.textContent = '📺 停止B站';
+        document.getElementById('st-bilibili').textContent = '✅';
+      } else {
+        log('❌ B站启动失败: ' + (j.error || ''), 'lerr');
+      }
+    } catch (e) {
+      log('❌ B站启动失败: danmaku-relay 未运行', 'lerr');
     }
   }
 }
@@ -195,6 +228,7 @@ async function toggleBilibili() {
 async function stopAll() {
   log('■ 停止所有服务…');
   await call('/stop');
+  try { await fetch(DANMAKU_API + '/stop'); } catch (e) {}
   setUI('offline');
   var btn = document.getElementById('btn-start');
   btn.textContent = '▶ 启动游戏';
@@ -316,6 +350,8 @@ async function saveAnnouncer() {
 // === init ===
 pollLogs();
 logPollTimer = setInterval(pollLogs, 1000);
-pollTimer = setInterval(pollStatus, 3000);
 pollStatus();
+pollDanmakuStatus();
+pollTimer = setInterval(pollStatus, 3000);
+setInterval(pollDanmakuStatus, 3000);
 // WS 等用户点击"启动"后才连

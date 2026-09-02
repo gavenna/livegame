@@ -17,8 +17,7 @@ console.log('=== war-danmaku SEA build ===');
 console.log(`Node: ${process.version}`);
 
 // 清理
-[path.join(DIST, 'bundle.js'), path.join(DIST, 'sea-prep.blob'),
- path.join(DIST, 'sea-config.json'), path.join(DIST, 'war-danmaku.exe')].forEach(f => {
+[path.join(DIST, 'war-danmaku.exe')].forEach(f => {
   try { fs.unlinkSync(f); } catch (e) { /* ok */ }
 });
 try { if (fs.existsSync(RELEASE)) fs.rmSync(RELEASE, { recursive: true, force: true, maxRetries: 3 }); } catch (e) { console.log('  [warn] Could not clean dist'); }
@@ -33,7 +32,7 @@ console.log(`  ${(fs.statSync(wasmPath).size / 1024).toFixed(0)} KB WASM -> ${(w
 const dataModulePath = path.join(ROOT, 'server', 'sql-wasm-data.js');
 fs.writeFileSync(dataModulePath, `module.exports = ${JSON.stringify(wasmB64)};`);
 
-// === Step 2: esbuild 全量 bundle (包含 toolbox 逻辑, 因为已合入 index.js) ===
+// === Step 2: esbuild 全量 bundle ===
 console.log('\n[2/4] esbuild bundle...');
 execSync(
   `npx esbuild server/index.js --bundle --platform=node --target=node24 --outfile="${path.join(DIST, 'bundle.js')}"`,
@@ -64,7 +63,7 @@ console.log(`  exe: ${(fs.statSync(exePath).size / 1024 / 1024).toFixed(1)} MB`)
 // === Step 4: 组装分发目录 ===
 console.log('\n[4/4] Assembling distribution...');
 fs.mkdirSync(RELEASE, { recursive: true });
-['server', 'data', 'tools', 'frontend', 'assets', 'toolbox'].forEach(d =>
+['server', 'data', 'frontend', 'assets', 'toolbox'].forEach(d =>
   fs.mkdirSync(path.join(RELEASE, d), { recursive: true })
 );
 
@@ -81,10 +80,6 @@ cp(path.join(ROOT, 'assets'), path.join(RELEASE, 'assets'));
   fs.copyFileSync(path.join(ROOT, 'toolbox', f), path.join(RELEASE, 'toolbox', f));
 });
 
-// douyinLive
-const dlPath = path.join(ROOT, 'tools', 'douyinLive.exe');
-if (fs.existsSync(dlPath)) fs.copyFileSync(dlPath, path.join(RELEASE, 'tools', 'douyinLive.exe'));
-
 // 配置
 const dstSecrets = path.join(RELEASE, 'server', 'secrets.json');
 const dstExample = path.join(RELEASE, 'server', 'secrets.json.example');
@@ -92,9 +87,7 @@ const prevSecrets = fs.existsSync(dstSecrets) ? fs.readFileSync(dstSecrets, 'utf
 
 fs.writeFileSync(dstExample, JSON.stringify({
   imageApiKey: "",
-  bilibili: { roomId: 0, uid: 0, cookie: "", giftMap: {} },
-  relayPort: 8766,
-  douyin: { enabled: false, roomId: "", proxyUrl: "ws://localhost:1088", giftMap: {}, cookie: "" }
+  announcer: { llmApiKey: "" }
 }, null, 2));
 
 if (prevSecrets) {

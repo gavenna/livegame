@@ -33,4 +33,3 @@ Filename: "{app}\war-danmaku.exe"; Description: "启动 war-danmaku"; Flags: now
 
 [UninstallRun]
 Filename: "taskkill"; Parameters: "/F /IM war-danmaku.exe"; Flags: runhidden skipifdoesntexist
-Filename: "taskkill"; Parameters: "/F /IM douyinLive.exe"; Flags: runhidden skipifdoesntexist
